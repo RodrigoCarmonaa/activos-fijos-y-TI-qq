@@ -3,12 +3,16 @@
 import type { Asset } from "@/lib/types"
 import { Monitor, QrCode, Building2, User, DollarSign, Calendar, Activity } from "lucide-react"
 
-const statusColors: Record<string, { bg: string; text: string; label: string }> = {
-  EN_BODEGA: { bg: "bg-slate-100", text: "text-slate-700", label: "En Bodega" },
+const statusConfig: Record<string, { bg: string; text: string; label: string }> = {
+  PENDIENTE_ADQUISICION: { bg: "bg-slate-100", text: "text-slate-700", label: "Pendiente" },
+  ADQUIRIDO: { bg: "bg-emerald-100", text: "text-emerald-700", label: "Adquirido" },
+  RECHAZADO: { bg: "bg-rose-100", text: "text-rose-700", label: "Rechazado" },
+  EN_BODEGA: { bg: "bg-indigo-100", text: "text-indigo-700", label: "En Bodega" },
   EN_CONFIGURACION: { bg: "bg-amber-100", text: "text-amber-700", label: "En Configuracion" },
   LISTO_PARA_ASIGNACION: { bg: "bg-blue-100", text: "text-blue-700", label: "Listo para Asignacion" },
   ASIGNADO: { bg: "bg-emerald-100", text: "text-emerald-700", label: "Asignado" },
   EN_MANTENCION: { bg: "bg-rose-100", text: "text-rose-700", label: "En Mantencion" },
+  DADO_DE_BAJA: { bg: "bg-red-100", text: "text-red-700", label: "Dado de Baja" },
 }
 
 interface AssetCardProps {
@@ -17,7 +21,7 @@ interface AssetCardProps {
 }
 
 export function AssetCard({ asset, compact = false }: AssetCardProps) {
-  const statusStyle = statusColors[asset.status] || statusColors.EN_BODEGA
+  const statusStyle = statusConfig[asset.status] || statusConfig.PENDIENTE_ADQUISICION
 
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat("es-CL", {
@@ -35,8 +39,8 @@ export function AssetCard({ asset, compact = false }: AssetCardProps) {
             <Monitor className="h-5 w-5 text-primary" />
           </div>
           <div>
-            <p className="font-medium text-card-foreground">{asset.name}</p>
-            <p className="text-sm text-muted-foreground">{asset.code}</p>
+            <p className="font-medium text-card-foreground">{asset.name || "Sin asignar"}</p>
+            <p className="text-sm text-muted-foreground">{asset.code || "---"}</p>
           </div>
         </div>
         <span className={`rounded-full px-3 py-1 text-xs font-medium ${statusStyle.bg} ${statusStyle.text}`}>
@@ -55,8 +59,8 @@ export function AssetCard({ asset, compact = false }: AssetCardProps) {
               <Monitor className="h-6 w-6 text-primary" />
             </div>
             <div>
-              <h3 className="font-semibold text-card-foreground">{asset.name}</h3>
-              <p className="text-sm text-muted-foreground">{asset.description}</p>
+              <h3 className="font-semibold text-card-foreground">{asset.name || "Sin asignar"}</h3>
+              <p className="text-sm text-muted-foreground">{asset.description || "Activo pendiente de registro"}</p>
             </div>
           </div>
           <span className={`rounded-full px-3 py-1.5 text-xs font-semibold ${statusStyle.bg} ${statusStyle.text}`}>
@@ -69,42 +73,42 @@ export function AssetCard({ asset, compact = false }: AssetCardProps) {
           <QrCode className="h-4 w-4 text-muted-foreground" />
           <div>
             <p className="text-xs text-muted-foreground">Codigo</p>
-            <p className="font-medium text-card-foreground">{asset.code}</p>
+            <p className="font-medium text-card-foreground">{asset.code || "---"}</p>
           </div>
         </div>
         <div className="flex items-center gap-2">
           <DollarSign className="h-4 w-4 text-muted-foreground" />
           <div>
             <p className="text-xs text-muted-foreground">Valor</p>
-            <p className="font-medium text-card-foreground">{formatCurrency(asset.value)}</p>
+            <p className="font-medium text-card-foreground">{asset.value ? formatCurrency(asset.value) : "---"}</p>
           </div>
         </div>
         <div className="flex items-center gap-2">
           <Building2 className="h-4 w-4 text-muted-foreground" />
           <div>
             <p className="text-xs text-muted-foreground">Proveedor</p>
-            <p className="font-medium text-card-foreground">{asset.provider}</p>
+            <p className="font-medium text-card-foreground">{asset.provider || "---"}</p>
           </div>
         </div>
         <div className="flex items-center gap-2">
           <User className="h-4 w-4 text-muted-foreground" />
           <div>
             <p className="text-xs text-muted-foreground">Custodio</p>
-            <p className="font-medium text-card-foreground">{asset.custodian}</p>
+            <p className="font-medium text-card-foreground">{asset.custodian || "---"}</p>
           </div>
         </div>
         <div className="flex items-center gap-2">
           <Calendar className="h-4 w-4 text-muted-foreground" />
           <div>
             <p className="text-xs text-muted-foreground">Fecha Compra</p>
-            <p className="font-medium text-card-foreground">{asset.purchaseDate}</p>
+            <p className="font-medium text-card-foreground">{asset.purchaseDate || "---"}</p>
           </div>
         </div>
         <div className="flex items-center gap-2">
           <Activity className="h-4 w-4 text-muted-foreground" />
           <div>
             <p className="text-xs text-muted-foreground">Tiempo en Uso</p>
-            <p className="font-medium text-card-foreground">{asset.yearsInUse} anios</p>
+            <p className="font-medium text-card-foreground">{asset.yearsInUse} anos</p>
           </div>
         </div>
       </div>

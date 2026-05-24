@@ -1,10 +1,14 @@
-// Estados posibles del activo en el flujo
+﻿// Estados posibles del activo en el flujo
 export type AssetStatus =
+  | "PENDIENTE_ADQUISICION"
+  | "ADQUIRIDO"
+  | "RECHAZADO"
   | "EN_BODEGA"
   | "EN_CONFIGURACION"
   | "LISTO_PARA_ASIGNACION"
   | "ASIGNADO"
   | "EN_MANTENCION"
+  | "DADO_DE_BAJA"
 
 // Información del activo
 export interface Asset {
@@ -18,6 +22,8 @@ export interface Asset {
   status: AssetStatus
   purchaseDate: string
   yearsInUse: number
+  usefulLife?: number
+  residualValue?: number
 }
 
 // Software corporativo
