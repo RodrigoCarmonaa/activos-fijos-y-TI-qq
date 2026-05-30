@@ -72,7 +72,10 @@ export interface SupportTicket {
   description: string
   yearsInUse: number
   createdAt: string
-  status: "ABIERTO" | "EN_PROCESO" | "CERRADO"
+  status: "ABIERTO" | "EN_PROCESO" | "CERRADO" | "DADO_DE_BAJA"
+  repairCost?: number
+  evaluatedAt?: string
+  evaluatedBy?: string
 }
 
 // Acta de custodia

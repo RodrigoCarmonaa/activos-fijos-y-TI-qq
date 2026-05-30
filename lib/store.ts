@@ -2,6 +2,7 @@
 
 import { create } from "zustand"
 import { persist } from "zustand/middleware"
+import { useEffect, useState } from "react"
 import type { 
   Asset, 
   AssetStatus, 
@@ -66,6 +67,8 @@ interface AppState {
   // Tickets de soporte
   supportTickets: SupportTicket[]
   createTicket: (assetId: string, description: string, yearsInUse: number) => void
+  evaluateRepair: (ticketId: string, repairCost: number) => { success: boolean; exceeds50Percent: boolean }
+  completeRepair: (ticketId: string) => void
 
   // Navegacion
   currentScreen: number
@@ -308,6 +311,92 @@ export const useAppStore = create<AppState>()(
         get().addEvent(assetId, asset.code, asset.status, "EN_MANTENCION", `Ticket de soporte creado: ${description}`)
       },
 
+      evaluateRepair: (ticketId, repairCost) => {
+        const currentUser = get().currentUser
+        if (!currentUser) return { success: false, exceeds50Percent: false }
+
+        const ticket = get().supportTickets.find((t) => t.id === ticketId)
+        if (!ticket) return { success: false, exceeds50Percent: false }
+
+        const asset = get().assets.find((a) => a.id === ticket.assetId)
+        if (!asset) return { success: false, exceeds50Percent: false }
+
+        const threshold = asset.value * 0.5
+        const exceeds50Percent = repairCost > threshold
+
+        if (exceeds50Percent) {
+          // Regla del 50%: dar de baja el activo
+          set((state) => ({
+            supportTickets: state.supportTickets.map((t) =>
+              t.id === ticketId
+                ? { ...t, repairCost, status: "DADO_DE_BAJA" as const, evaluatedAt: new Date().toISOString(), evaluatedBy: currentUser.name }
+                : t
+            ),
+            assets: state.assets.map((a) =>
+              a.id === ticket.assetId
+                ? { ...a, status: "DADO_DE_BAJA" as const, updatedAt: new Date().toISOString() }
+                : a
+            ),
+          }))
+
+          get().addEvent(
+            ticket.assetId,
+            ticket.assetCode,
+            "EN_MANTENCION",
+            "DADO_DE_BAJA",
+            `Reparacion bloqueada: costo $${repairCost.toLocaleString("es-CL")} excede 50% del valor de compra ($${threshold.toLocaleString("es-CL")}). Activo dado de baja.`
+          )
+
+          return { success: true, exceeds50Percent: true }
+        } else {
+          // Reparacion aprobada
+          set((state) => ({
+            supportTickets: state.supportTickets.map((t) =>
+              t.id === ticketId
+                ? { ...t, repairCost, status: "EN_PROCESO" as const, evaluatedAt: new Date().toISOString(), evaluatedBy: currentUser.name }
+                : t
+            ),
+          }))
+
+          get().addEvent(
+            ticket.assetId,
+            ticket.assetCode,
+            "EN_MANTENCION",
+            "EN_MANTENCION",
+            `Reparacion aprobada: costo $${repairCost.toLocaleString("es-CL")} dentro del limite (50% = $${threshold.toLocaleString("es-CL")})`
+          )
+
+          return { success: true, exceeds50Percent: false }
+        }
+      },
+
+      completeRepair: (ticketId) => {
+        const currentUser = get().currentUser
+        if (!currentUser) return
+
+        const ticket = get().supportTickets.find((t) => t.id === ticketId)
+        if (!ticket || ticket.status !== "EN_PROCESO") return
+
+        set((state) => ({
+          supportTickets: state.supportTickets.map((t) =>
+            t.id === ticketId ? { ...t, status: "CERRADO" as const } : t
+          ),
+          assets: state.assets.map((a) =>
+            a.id === ticket.assetId
+              ? { ...a, status: "ASIGNADO" as const, updatedAt: new Date().toISOString() }
+              : a
+          ),
+        }))
+
+        get().addEvent(
+          ticket.assetId,
+          ticket.assetCode,
+          "EN_MANTENCION",
+          "ASIGNADO",
+          `Reparacion completada. Activo devuelto al custodio.`
+        )
+      },
+
       // Navegacion
       setCurrentScreen: (screen) => set({ currentScreen: screen }),
       
@@ -323,3 +412,14 @@ export const useAppStore = create<AppState>()(
     }
   )
 )
+
+// Hook para manejar la hidratacion de Zustand con SSR
+export function useHydration() {
+  const [hydrated, setHydrated] = useState(false)
+
+  useEffect(() => {
+    setHydrated(true)
+  }, [])
+
+  return hydrated
+}

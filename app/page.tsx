@@ -1,6 +1,6 @@
 "use client"
 
-import { useAppStore } from "@/lib/store"
+import { useAppStore, useHydration } from "@/lib/store"
 import { ROLE_PERMISSIONS, ROLE_NAMES, type UserRole } from "@/lib/types"
 import { LoginScreen } from "@/components/screens/login"
 import { Adquisicion } from "@/components/screens/adquisicion"
@@ -21,9 +21,11 @@ import {
   User,
   Building2,
   Menu,
-  X
+  X,
+  ShieldAlert
 } from "lucide-react"
 import { useState } from "react"
+import { Loader2 } from "lucide-react"
 
 const screens = [
   { id: 0, name: "Adquisicion", shortName: "P1", icon: ShoppingCart, color: "emerald" },
@@ -70,29 +72,73 @@ const colorClasses: Record<string, { active: string; inactive: string; icon: str
 export default function Home() {
   const { currentUser, currentScreen, setCurrentScreen, logout, resetStore } = useAppStore()
   const [sidebarOpen, setSidebarOpen] = useState(false)
+  const [, forceUpdate] = useState(0)
+  const hydrated = useHydration()
+
+  // Forzar re-render después del login
+  const handleLoginComplete = () => {
+    forceUpdate((n) => n + 1)
+  }
+
+  // Mostrar loading mientras se hidrata el store
+  if (!hydrated) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-background">
+        <div className="text-center">
+          <Loader2 className="mx-auto h-8 w-8 animate-spin text-primary" />
+          <p className="mt-2 text-sm text-muted-foreground">Cargando...</p>
+        </div>
+      </div>
+    )
+  }
 
   // Si no hay usuario logueado, mostrar pantalla de login
   if (!currentUser) {
     return (
       <>
         <Toaster position="top-right" richColors />
-        <LoginScreen />
+        <LoginScreen onLogin={handleLoginComplete} />
       </>
     )
   }
 
   const userPermissions = ROLE_PERMISSIONS[currentUser.role]
   const accessibleScreens = screens.filter((s) => userPermissions.includes(s.id))
+  const hasAccessToCurrentScreen = userPermissions.includes(currentScreen)
+
+  // Componente de Acceso Denegado
+  const AccessDenied = () => (
+    <div className="flex min-h-screen items-center justify-center bg-background p-4">
+      <div className="max-w-md rounded-xl border border-destructive/30 bg-card p-8 text-center shadow-lg">
+        <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-destructive/10">
+          <ShieldAlert className="h-8 w-8 text-destructive" />
+        </div>
+        <h2 className="text-xl font-bold text-destructive">Acceso Denegado</h2>
+        <p className="mt-2 text-sm text-muted-foreground">
+          Tu rol <span className="font-medium text-foreground">{ROLE_NAMES[currentUser.role]}</span> no tiene permisos para acceder a este modulo.
+        </p>
+        <div className="mt-6 space-y-2">
+          <p className="text-xs text-muted-foreground">Modulos disponibles para tu rol:</p>
+          <div className="flex flex-wrap justify-center gap-2">
+            {accessibleScreens.map((screen) => (
+              <button
+                key={screen.id}
+                onClick={() => setCurrentScreen(screen.id)}
+                className={`rounded-full px-3 py-1 text-xs font-medium transition-colors ${colorClasses[screen.color].inactive} hover:opacity-80`}
+              >
+                {screen.name}
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>
+    </div>
+  )
 
   const renderScreen = () => {
     // Verificar si el usuario tiene permiso para la pantalla actual
-    if (!userPermissions.includes(currentScreen)) {
-      // Redirigir a la primera pantalla permitida
-      const firstAllowed = accessibleScreens[0]
-      if (firstAllowed) {
-        setCurrentScreen(firstAllowed.id)
-      }
-      return null
+    if (!hasAccessToCurrentScreen) {
+      return <AccessDenied />
     }
 
     switch (currentScreen) {

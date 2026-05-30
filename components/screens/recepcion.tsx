@@ -3,6 +3,9 @@
 import { useState } from "react"
 import { useAppStore } from "@/lib/store"
 import { toast } from "sonner"
+import { useForm } from "react-hook-form"
+import { zodResolver } from "@hookform/resolvers/zod"
+import { z } from "zod"
 import { 
   Warehouse, 
   QrCode,
@@ -13,11 +16,24 @@ import {
   Search
 } from "lucide-react"
 
+// Schema de validacion con Zod
+const recepcionSchema = z.object({
+  qrCode: z.string()
+    .min(1, "El codigo QR es requerido")
+    .regex(/^[A-Za-z0-9-]+$/, "Formato de codigo invalido"),
+})
+
+type RecepcionFormData = z.infer<typeof recepcionSchema>
+
 export function Recepcion() {
   const { assets, updateAssetStatus, getAssetByCode } = useAppStore()
-  const [qrCode, setQrCode] = useState("")
   const [isScanning, setIsScanning] = useState(false)
   const [scannedAsset, setScannedAsset] = useState<typeof assets[0] | null>(null)
+
+  const form = useForm<RecepcionFormData>({
+    resolver: zodResolver(recepcionSchema),
+    defaultValues: { qrCode: "" },
+  })
 
   const acquiredAssets = assets.filter((a) => a.status === "ADQUIRIDO")
   const receivedToday = assets.filter(
@@ -25,22 +41,15 @@ export function Recepcion() {
     new Date(a.updatedAt).toDateString() === new Date().toDateString()
   )
 
-  const handleScanQR = async () => {
-    if (!qrCode.trim()) {
-      toast.error("Codigo vacio", {
-        description: "Por favor ingresa un codigo QR para escanear.",
-      })
-      return
-    }
-
+  const handleScanQR = async (data: RecepcionFormData) => {
     setIsScanning(true)
     await new Promise((resolve) => setTimeout(resolve, 800))
 
-    const asset = getAssetByCode(qrCode.trim())
+    const asset = getAssetByCode(data.qrCode.trim())
 
     if (!asset) {
       toast.error("Activo no encontrado", {
-        description: `No existe un activo con el codigo "${qrCode.toUpperCase()}" en el sistema.`,
+        description: `No existe un activo con el codigo "${data.qrCode.toUpperCase()}" en el sistema.`,
       })
       setScannedAsset(null)
       setIsScanning(false)
@@ -74,7 +83,11 @@ export function Recepcion() {
     })
 
     setScannedAsset(null)
-    setQrCode("")
+    form.reset()
+  }
+
+  const handleSelectAsset = (code: string) => {
+    form.setValue("qrCode", code)
   }
 
   return (
@@ -107,22 +120,24 @@ export function Recepcion() {
                 </div>
               </div>
 
-              <div className="space-y-4">
+              <form onSubmit={form.handleSubmit(handleScanQR)} className="space-y-4">
                 <div>
                   <label className="mb-1.5 block text-sm font-medium text-foreground">
-                    Codigo QR / Inventario
+                    Codigo QR / Inventario *
                   </label>
                   <div className="flex gap-2">
                     <input
                       type="text"
-                      value={qrCode}
-                      onChange={(e) => setQrCode(e.target.value)}
-                      onKeyDown={(e) => e.key === "Enter" && handleScanQR()}
+                      {...form.register("qrCode")}
                       placeholder="Ingresa o escanea el codigo..."
-                      className="flex-1 rounded-lg border border-border bg-background px-3 py-2.5 text-foreground uppercase outline-none transition-colors focus:border-primary focus:ring-2 focus:ring-primary/20"
+                      className={`flex-1 rounded-lg border px-3 py-2.5 text-foreground uppercase outline-none transition-colors focus:ring-2 focus:ring-primary/20 ${
+                        form.formState.errors.qrCode 
+                          ? "border-destructive bg-destructive/5" 
+                          : "border-border bg-background focus:border-primary"
+                      }`}
                     />
                     <button
-                      onClick={handleScanQR}
+                      type="submit"
                       disabled={isScanning}
                       className="flex items-center gap-2 rounded-lg bg-blue-500 px-4 py-2.5 font-medium text-white transition-colors hover:bg-blue-600 disabled:opacity-50"
                     >
@@ -133,6 +148,9 @@ export function Recepcion() {
                       )}
                     </button>
                   </div>
+                  {form.formState.errors.qrCode && (
+                    <p className="mt-1 text-xs text-destructive">{form.formState.errors.qrCode.message}</p>
+                  )}
                 </div>
 
                 {/* Resultado del Escaneo */}
@@ -163,6 +181,7 @@ export function Recepcion() {
                       </div>
                     </div>
                     <button
+                      type="button"
                       onClick={handleConfirmReception}
                       className="mt-4 flex w-full items-center justify-center gap-2 rounded-lg bg-emerald-500 px-4 py-2.5 font-medium text-white transition-colors hover:bg-emerald-600"
                     >
@@ -179,7 +198,7 @@ export function Recepcion() {
                     Solo se pueden recibir activos en estado ADQUIRIDO. Verifica que el codigo coincida con la orden de compra.
                   </p>
                 </div>
-              </div>
+              </form>
             </div>
           </div>
 
@@ -214,7 +233,7 @@ export function Recepcion() {
                         <p className="text-sm text-muted-foreground">{asset.provider}</p>
                       </div>
                       <button
-                        onClick={() => setQrCode(asset.code)}
+                        onClick={() => handleSelectAsset(asset.code)}
                         className="rounded-lg border border-border px-3 py-1.5 text-xs font-medium text-foreground transition-colors hover:bg-muted"
                       >
                         Seleccionar

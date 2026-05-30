@@ -3,6 +3,9 @@
 import { useState } from "react"
 import { useAppStore } from "@/lib/store"
 import { toast } from "sonner"
+import { useForm } from "react-hook-form"
+import { zodResolver } from "@hookform/resolvers/zod"
+import { z } from "zod"
 import { 
   ShoppingCart, 
   Plus, 
@@ -16,107 +19,83 @@ import {
   CheckCircle
 } from "lucide-react"
 
-interface FormData {
-  code: string
-  name: string
-  marca: string
-  modelo: string
-  description: string
-  value: string
-  provider: string
-  solicitante: string
-}
+// Schema de validacion con Zod
+const adquisicionSchema = z.object({
+  code: z.string()
+    .min(1, "El codigo QR es requerido")
+    .regex(/^[A-Za-z0-9-]+$/, "Solo se permiten letras, numeros y guiones"),
+  marca: z.string().min(1, "La marca es requerida").max(50, "Maximo 50 caracteres"),
+  modelo: z.string().min(1, "El modelo es requerido").max(100, "Maximo 100 caracteres"),
+  value: z.number({
+    required_error: "El precio es requerido",
+    invalid_type_error: "Debe ser un numero valido",
+  }).positive("El precio debe ser mayor a 0"),
+  provider: z.string().min(1, "El proveedor es requerido").max(100, "Maximo 100 caracteres"),
+  solicitante: z.string().min(1, "El solicitante es requerido").max(100, "Maximo 100 caracteres"),
+  description: z.string().max(500, "Maximo 500 caracteres").optional(),
+})
 
-const initialFormData: FormData = {
-  code: "",
-  name: "",
-  marca: "",
-  modelo: "",
-  description: "",
-  value: "",
-  provider: "",
-  solicitante: "",
-}
+type AdquisicionFormData = z.infer<typeof adquisicionSchema>
 
 export function Adquisicion() {
   const { addAsset, assets, updateAssetStatus, currentUser } = useAppStore()
-  const [formData, setFormData] = useState<FormData>(initialFormData)
   const [isSubmitting, setIsSubmitting] = useState(false)
-  const [errors, setErrors] = useState<Partial<FormData>>({})
+
+  const form = useForm<AdquisicionFormData>({
+    resolver: zodResolver(adquisicionSchema),
+    defaultValues: {
+      code: "",
+      marca: "",
+      modelo: "",
+      value: 0,
+      provider: "",
+      solicitante: "",
+      description: "",
+    },
+  })
 
   const pendingAssets = assets.filter((a) => a.status === "PENDIENTE")
 
-  const validateForm = (): boolean => {
-    const newErrors: Partial<FormData> = {}
-
-    if (!formData.code.trim()) {
-      newErrors.code = "El codigo QR es requerido"
-    } else if (assets.some((a) => a.code.toUpperCase() === formData.code.toUpperCase())) {
-      newErrors.code = "Este codigo ya existe en el sistema"
-    }
-
-    if (!formData.marca.trim()) {
-      newErrors.marca = "La marca es requerida"
-    }
-
-    if (!formData.modelo.trim()) {
-      newErrors.modelo = "El modelo es requerido"
-    }
-
-    if (!formData.value.trim()) {
-      newErrors.value = "El precio es requerido"
-    } else if (parseFloat(formData.value) <= 0) {
-      newErrors.value = "El precio debe ser mayor a 0"
-    }
-
-    if (!formData.provider.trim()) {
-      newErrors.provider = "El proveedor es requerido"
-    }
-
-    if (!formData.solicitante.trim()) {
-      newErrors.solicitante = "El solicitante es requerido"
-    }
-
-    setErrors(newErrors)
-
-    if (Object.keys(newErrors).length > 0) {
-      const firstError = Object.values(newErrors)[0]
-      toast.error("Error de validacion", {
-        description: firstError,
-      })
+  // Validacion adicional: codigo unico
+  const validateUniqueCode = (code: string): boolean => {
+    if (assets.some((a) => a.code.toUpperCase() === code.toUpperCase())) {
+      form.setError("code", { message: "Este codigo ya existe en el sistema" })
       return false
     }
-
     return true
   }
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-
-    if (!validateForm()) return
+  const handleSubmit = async (data: AdquisicionFormData) => {
+    // Validar codigo unico
+    if (!validateUniqueCode(data.code)) {
+      toast.error("Error de validacion", {
+        description: "Este codigo ya existe en el sistema",
+      })
+      return
+    }
 
     setIsSubmitting(true)
     await new Promise((resolve) => setTimeout(resolve, 1000))
 
-    const assetName = `${formData.marca} ${formData.modelo}`
+    const assetName = `${data.marca} ${data.modelo}`
     
     addAsset({
-      code: formData.code.toUpperCase(),
+      code: data.code.toUpperCase(),
       name: assetName,
-      marca: formData.marca,
-      modelo: formData.modelo,
-      description: formData.description || `${assetName} adquirido por ${currentUser?.name}`,
-      value: parseFloat(formData.value),
-      provider: formData.provider,
-      solicitante: formData.solicitante,
+      marca: data.marca,
+      modelo: data.modelo,
+      description: data.description || `${assetName} adquirido por ${currentUser?.name}`,
+      value: data.value,
+      provider: data.provider,
+      solicitante: data.solicitante,
       purchaseDate: new Date().toISOString().split("T")[0],
     })
 
     toast.success("Activo registrado", {
-      description: `${assetName} (${formData.code.toUpperCase()}) ha sido registrado exitosamente.`,
+      description: `${assetName} (${data.code.toUpperCase()}) ha sido registrado exitosamente.`,
     })
 
-    setFormData(initialFormData)
+    form.reset()
     setIsSubmitting(false)
   }
 
@@ -126,14 +105,6 @@ export function Adquisicion() {
     toast.success("Compra confirmada", {
       description: "El activo ahora puede ser recibido en bodega.",
     })
-  }
-
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
-    const { name, value } = e.target
-    setFormData((prev) => ({ ...prev, [name]: value }))
-    if (errors[name as keyof FormData]) {
-      setErrors((prev) => ({ ...prev, [name]: undefined }))
-    }
   }
 
   return (
@@ -160,7 +131,7 @@ export function Adquisicion() {
           <div>
             <h2 className="mb-4 text-lg font-semibold text-foreground">Nuevo Activo</h2>
             <div className="rounded-xl border border-border bg-card shadow-sm">
-              <form onSubmit={handleSubmit} className="p-6">
+              <form onSubmit={form.handleSubmit(handleSubmit)} className="p-6">
                 <div className="space-y-4">
                   {/* Codigo QR */}
                   <div>
@@ -170,15 +141,17 @@ export function Adquisicion() {
                     </label>
                     <input
                       type="text"
-                      name="code"
-                      value={formData.code}
-                      onChange={handleChange}
+                      {...form.register("code")}
                       placeholder="Ej: QR-013"
                       className={`w-full rounded-lg border px-3 py-2.5 text-foreground outline-none transition-colors focus:ring-2 focus:ring-primary/20 ${
-                        errors.code ? "border-destructive bg-destructive/5" : "border-border bg-background focus:border-primary"
+                        form.formState.errors.code 
+                          ? "border-destructive bg-destructive/5" 
+                          : "border-border bg-background focus:border-primary"
                       }`}
                     />
-                    {errors.code && <p className="mt-1 text-xs text-destructive">{errors.code}</p>}
+                    {form.formState.errors.code && (
+                      <p className="mt-1 text-xs text-destructive">{form.formState.errors.code.message}</p>
+                    )}
                   </div>
 
                   {/* Marca y Modelo */}
@@ -190,15 +163,17 @@ export function Adquisicion() {
                       </label>
                       <input
                         type="text"
-                        name="marca"
-                        value={formData.marca}
-                        onChange={handleChange}
+                        {...form.register("marca")}
                         placeholder="Ej: HP"
                         className={`w-full rounded-lg border px-3 py-2.5 text-foreground outline-none transition-colors focus:ring-2 focus:ring-primary/20 ${
-                          errors.marca ? "border-destructive bg-destructive/5" : "border-border bg-background focus:border-primary"
+                          form.formState.errors.marca 
+                            ? "border-destructive bg-destructive/5" 
+                            : "border-border bg-background focus:border-primary"
                         }`}
                       />
-                      {errors.marca && <p className="mt-1 text-xs text-destructive">{errors.marca}</p>}
+                      {form.formState.errors.marca && (
+                        <p className="mt-1 text-xs text-destructive">{form.formState.errors.marca.message}</p>
+                      )}
                     </div>
                     <div>
                       <label className="mb-1.5 flex items-center gap-2 text-sm font-medium text-foreground">
@@ -207,15 +182,17 @@ export function Adquisicion() {
                       </label>
                       <input
                         type="text"
-                        name="modelo"
-                        value={formData.modelo}
-                        onChange={handleChange}
+                        {...form.register("modelo")}
                         placeholder="Ej: ProBook 450 G10"
                         className={`w-full rounded-lg border px-3 py-2.5 text-foreground outline-none transition-colors focus:ring-2 focus:ring-primary/20 ${
-                          errors.modelo ? "border-destructive bg-destructive/5" : "border-border bg-background focus:border-primary"
+                          form.formState.errors.modelo 
+                            ? "border-destructive bg-destructive/5" 
+                            : "border-border bg-background focus:border-primary"
                         }`}
                       />
-                      {errors.modelo && <p className="mt-1 text-xs text-destructive">{errors.modelo}</p>}
+                      {form.formState.errors.modelo && (
+                        <p className="mt-1 text-xs text-destructive">{form.formState.errors.modelo.message}</p>
+                      )}
                     </div>
                   </div>
 
@@ -227,17 +204,19 @@ export function Adquisicion() {
                     </label>
                     <input
                       type="number"
-                      name="value"
-                      value={formData.value}
-                      onChange={handleChange}
+                      {...form.register("value", { valueAsNumber: true })}
                       placeholder="Ej: 845900"
-                      min="0"
+                      min="1"
                       step="1"
                       className={`w-full rounded-lg border px-3 py-2.5 text-foreground outline-none transition-colors focus:ring-2 focus:ring-primary/20 ${
-                        errors.value ? "border-destructive bg-destructive/5" : "border-border bg-background focus:border-primary"
+                        form.formState.errors.value 
+                          ? "border-destructive bg-destructive/5" 
+                          : "border-border bg-background focus:border-primary"
                       }`}
                     />
-                    {errors.value && <p className="mt-1 text-xs text-destructive">{errors.value}</p>}
+                    {form.formState.errors.value && (
+                      <p className="mt-1 text-xs text-destructive">{form.formState.errors.value.message}</p>
+                    )}
                   </div>
 
                   {/* Proveedor */}
@@ -248,15 +227,17 @@ export function Adquisicion() {
                     </label>
                     <input
                       type="text"
-                      name="provider"
-                      value={formData.provider}
-                      onChange={handleChange}
+                      {...form.register("provider")}
                       placeholder="Ej: SOLUCIONES TCP"
                       className={`w-full rounded-lg border px-3 py-2.5 text-foreground outline-none transition-colors focus:ring-2 focus:ring-primary/20 ${
-                        errors.provider ? "border-destructive bg-destructive/5" : "border-border bg-background focus:border-primary"
+                        form.formState.errors.provider 
+                          ? "border-destructive bg-destructive/5" 
+                          : "border-border bg-background focus:border-primary"
                       }`}
                     />
-                    {errors.provider && <p className="mt-1 text-xs text-destructive">{errors.provider}</p>}
+                    {form.formState.errors.provider && (
+                      <p className="mt-1 text-xs text-destructive">{form.formState.errors.provider.message}</p>
+                    )}
                   </div>
 
                   {/* Solicitante */}
@@ -267,15 +248,17 @@ export function Adquisicion() {
                     </label>
                     <input
                       type="text"
-                      name="solicitante"
-                      value={formData.solicitante}
-                      onChange={handleChange}
+                      {...form.register("solicitante")}
                       placeholder="Ej: Gerencia de Operaciones"
                       className={`w-full rounded-lg border px-3 py-2.5 text-foreground outline-none transition-colors focus:ring-2 focus:ring-primary/20 ${
-                        errors.solicitante ? "border-destructive bg-destructive/5" : "border-border bg-background focus:border-primary"
+                        form.formState.errors.solicitante 
+                          ? "border-destructive bg-destructive/5" 
+                          : "border-border bg-background focus:border-primary"
                       }`}
                     />
-                    {errors.solicitante && <p className="mt-1 text-xs text-destructive">{errors.solicitante}</p>}
+                    {form.formState.errors.solicitante && (
+                      <p className="mt-1 text-xs text-destructive">{form.formState.errors.solicitante.message}</p>
+                    )}
                   </div>
 
                   {/* Descripcion */}
@@ -285,13 +268,18 @@ export function Adquisicion() {
                       Descripcion (Opcional)
                     </label>
                     <textarea
-                      name="description"
-                      value={formData.description}
-                      onChange={handleChange}
+                      {...form.register("description")}
                       rows={2}
                       placeholder="Descripcion adicional del activo..."
-                      className="w-full resize-none rounded-lg border border-border bg-background px-3 py-2.5 text-foreground outline-none transition-colors focus:border-primary focus:ring-2 focus:ring-primary/20"
+                      className={`w-full resize-none rounded-lg border px-3 py-2.5 text-foreground outline-none transition-colors focus:ring-2 focus:ring-primary/20 ${
+                        form.formState.errors.description 
+                          ? "border-destructive bg-destructive/5" 
+                          : "border-border bg-background focus:border-primary"
+                      }`}
                     />
+                    {form.formState.errors.description && (
+                      <p className="mt-1 text-xs text-destructive">{form.formState.errors.description.message}</p>
+                    )}
                   </div>
 
                   <button
