@@ -2,7 +2,7 @@
 
 import { useState } from "react"
 import { useAppStore } from "@/lib/store"
-import { AssetCard } from "@/components/asset-card"
+import { toast } from "sonner"
 import { 
   FileSignature, 
   CheckCircle, 
@@ -12,23 +12,27 @@ import {
   User,
   Calendar,
   Monitor,
-  Loader2
+  Loader2,
+  Package
 } from "lucide-react"
 
 export function CustodiaFirmas() {
-  const { asset, custodyActs, signAct, rejectAct, addNotification } = useAppStore()
+  const { assets, custodyActs, signAct, rejectAct } = useAppStore()
   const [processingId, setProcessingId] = useState<string | null>(null)
   const [showActaModal, setShowActaModal] = useState(false)
   const [selectedActId, setSelectedActId] = useState<string | null>(null)
 
   const pendingActs = custodyActs.filter((act) => act.status === "PENDIENTE")
   const selectedAct = custodyActs.find((act) => act.id === selectedActId)
+  const selectedAsset = selectedAct ? assets.find((a) => a.id === selectedAct.assetId) : null
 
   const handleSignAct = async (actId: string) => {
     setProcessingId(actId)
     await new Promise((resolve) => setTimeout(resolve, 1500))
     signAct(actId)
-    addNotification("Acta firmada exitosamente. Activo asignado al custodio.", "success")
+    toast.success("Acta firmada", {
+      description: "Activo asignado exitosamente al custodio.",
+    })
     setProcessingId(null)
     setShowActaModal(false)
   }
@@ -37,7 +41,9 @@ export function CustodiaFirmas() {
     setProcessingId(actId)
     await new Promise((resolve) => setTimeout(resolve, 1500))
     rejectAct(actId)
-    addNotification("Conflicto escalado a RRHH para mediacion. Activo retornado a bodega.", "error")
+    toast.error("Acta rechazada", {
+      description: "Conflicto escalado a RRHH. Activo retornado a bodega.",
+    })
     setProcessingId(null)
     setShowActaModal(false)
   }
@@ -53,12 +59,12 @@ export function CustodiaFirmas() {
       <header className="border-b border-border bg-card">
         <div className="mx-auto max-w-5xl px-4 py-6">
           <div className="flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-blue-100">
-              <FileSignature className="h-5 w-5 text-blue-700" />
+            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-purple-100">
+              <FileSignature className="h-5 w-5 text-purple-700" />
             </div>
             <div>
-              <h1 className="text-xl font-semibold text-card-foreground">Custodia y Firmas Digitales</h1>
-              <p className="text-sm text-muted-foreground">Interfaz del Custodio / Jefe de Area</p>
+              <h1 className="text-xl font-semibold text-card-foreground">Custodia y Firmas</h1>
+              <p className="text-sm text-muted-foreground">Modulo P3 - Custodio</p>
             </div>
           </div>
         </div>
@@ -67,12 +73,6 @@ export function CustodiaFirmas() {
       {/* Main Content */}
       <main className="mx-auto max-w-5xl px-4 py-8">
         <div className="grid gap-6 lg:grid-cols-2">
-          {/* Estado del Activo */}
-          <div>
-            <h2 className="mb-4 text-lg font-semibold text-foreground">Estado del Activo</h2>
-            <AssetCard asset={asset} />
-          </div>
-
           {/* Actas Pendientes */}
           <div>
             <h2 className="mb-4 text-lg font-semibold text-foreground">Actas Pendientes de Firma</h2>
@@ -82,101 +82,129 @@ export function CustodiaFirmas() {
                 <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-emerald-100">
                   <CheckCircle className="h-6 w-6 text-emerald-600" />
                 </div>
-                <p className="font-medium text-card-foreground">No hay actas pendientes</p>
+                <p className="font-medium text-card-foreground">Sin actas pendientes</p>
                 <p className="mt-1 text-sm text-muted-foreground">
                   Todas las actas han sido procesadas
                 </p>
               </div>
             ) : (
               <div className="space-y-3">
-                {pendingActs.map((act) => (
-                  <div
-                    key={act.id}
-                    className="rounded-xl border border-border bg-card p-4 shadow-sm"
-                  >
-                    <div className="flex items-start justify-between">
-                      <div className="flex items-center gap-3">
-                        <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-blue-100">
-                          <FileText className="h-5 w-5 text-blue-600" />
+                {pendingActs.map((act) => {
+                  const asset = assets.find((a) => a.id === act.assetId)
+                  return (
+                    <div
+                      key={act.id}
+                      className="rounded-xl border border-border bg-card p-4 shadow-sm"
+                    >
+                      <div className="flex items-start justify-between">
+                        <div className="flex items-center gap-3">
+                          <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-purple-100">
+                            <FileText className="h-5 w-5 text-purple-600" />
+                          </div>
+                          <div>
+                            <p className="font-medium text-card-foreground">
+                              Acta de Responsabilidad
+                            </p>
+                            <p className="text-sm text-muted-foreground">
+                              {act.assetName} ({act.assetCode})
+                            </p>
+                          </div>
                         </div>
-                        <div>
-                          <p className="font-medium text-card-foreground">
-                            Acta de Responsabilidad
-                          </p>
-                          <p className="text-sm text-muted-foreground">
-                            {act.assetName} ({act.assetCode})
-                          </p>
-                        </div>
-                      </div>
-                      <span className="rounded-full bg-amber-100 px-2.5 py-1 text-xs font-medium text-amber-700">
-                        Pendiente
-                      </span>
-                    </div>
-
-                    <div className="mt-4 grid grid-cols-2 gap-3 text-sm">
-                      <div className="flex items-center gap-2">
-                        <User className="h-4 w-4 text-muted-foreground" />
-                        <span className="text-muted-foreground">Custodio:</span>
-                        <span className="font-medium text-card-foreground">{act.custodian}</span>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <Calendar className="h-4 w-4 text-muted-foreground" />
-                        <span className="text-muted-foreground">Fecha:</span>
-                        <span className="font-medium text-card-foreground">
-                          {new Date(act.createdAt).toLocaleDateString("es-CL")}
+                        <span className="rounded-full bg-amber-100 px-2.5 py-1 text-xs font-medium text-amber-700">
+                          Pendiente
                         </span>
                       </div>
-                    </div>
 
-                    <div className="mt-4">
-                      <button
-                        onClick={() => openActaModal(act.id)}
-                        className="w-full rounded-lg bg-blue-500 px-4 py-2.5 font-medium text-white transition-colors hover:bg-blue-600"
-                      >
-                        Ver Acta y Gestionar Firma
-                      </button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-
-            {/* Historial de Actas */}
-            {custodyActs.filter((a) => a.status !== "PENDIENTE").length > 0 && (
-              <div className="mt-6">
-                <h3 className="mb-3 text-sm font-medium text-muted-foreground">Historial</h3>
-                <div className="space-y-2">
-                  {custodyActs
-                    .filter((a) => a.status !== "PENDIENTE")
-                    .map((act) => (
-                      <div
-                        key={act.id}
-                        className={`flex items-center justify-between rounded-lg border p-3 ${
-                          act.status === "FIRMADA"
-                            ? "border-emerald-200 bg-emerald-50"
-                            : "border-rose-200 bg-rose-50"
-                        }`}
-                      >
+                      <div className="mt-4 grid grid-cols-2 gap-3 text-sm">
                         <div className="flex items-center gap-2">
-                          {act.status === "FIRMADA" ? (
-                            <CheckCircle className="h-4 w-4 text-emerald-600" />
-                          ) : (
-                            <XCircle className="h-4 w-4 text-rose-600" />
-                          )}
-                          <span className="text-sm font-medium">
-                            {act.assetCode} - {act.custodian}
+                          <User className="h-4 w-4 text-muted-foreground" />
+                          <span className="text-muted-foreground">Custodio:</span>
+                          <span className="font-medium text-card-foreground">{act.custodian}</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <Calendar className="h-4 w-4 text-muted-foreground" />
+                          <span className="text-muted-foreground">Fecha:</span>
+                          <span className="font-medium text-card-foreground">
+                            {new Date(act.createdAt).toLocaleDateString("es-CL")}
                           </span>
                         </div>
-                        <span
-                          className={`text-xs font-medium ${
-                            act.status === "FIRMADA" ? "text-emerald-600" : "text-rose-600"
-                          }`}
-                        >
-                          {act.status === "FIRMADA" ? "Firmada" : "Rechazada"}
-                        </span>
                       </div>
-                    ))}
+
+                      {asset && (
+                        <div className="mt-3 rounded-lg bg-muted/50 p-3 text-sm">
+                          <p className="text-muted-foreground">
+                            Valor: <span className="font-medium text-foreground">${asset.value.toLocaleString("es-CL")}</span>
+                          </p>
+                        </div>
+                      )}
+
+                      <div className="mt-4">
+                        <button
+                          onClick={() => openActaModal(act.id)}
+                          className="w-full rounded-lg bg-purple-500 px-4 py-2.5 font-medium text-white transition-colors hover:bg-purple-600"
+                        >
+                          Ver Acta y Gestionar Firma
+                        </button>
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            )}
+          </div>
+
+          {/* Historial */}
+          <div>
+            <h2 className="mb-4 text-lg font-semibold text-foreground">Historial de Actas</h2>
+            {custodyActs.filter((a) => a.status !== "PENDIENTE").length === 0 ? (
+              <div className="rounded-xl border border-border bg-card p-8 text-center">
+                <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-slate-100">
+                  <Package className="h-6 w-6 text-slate-500" />
                 </div>
+                <p className="font-medium text-card-foreground">Sin historial</p>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  Las actas procesadas apareceran aqui
+                </p>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {custodyActs
+                  .filter((a) => a.status !== "PENDIENTE")
+                  .map((act) => (
+                    <div
+                      key={act.id}
+                      className={`flex items-center justify-between rounded-lg border p-4 ${
+                        act.status === "FIRMADA"
+                          ? "border-emerald-200 bg-emerald-50"
+                          : "border-rose-200 bg-rose-50"
+                      }`}
+                    >
+                      <div className="flex items-center gap-3">
+                        {act.status === "FIRMADA" ? (
+                          <CheckCircle className="h-5 w-5 text-emerald-600" />
+                        ) : (
+                          <XCircle className="h-5 w-5 text-rose-600" />
+                        )}
+                        <div>
+                          <p className={`font-medium ${act.status === "FIRMADA" ? "text-emerald-800" : "text-rose-800"}`}>
+                            {act.assetCode} - {act.assetName}
+                          </p>
+                          <p className={`text-sm ${act.status === "FIRMADA" ? "text-emerald-700" : "text-rose-700"}`}>
+                            Custodio: {act.custodian}
+                          </p>
+                        </div>
+                      </div>
+                      <span
+                        className={`rounded-full px-2.5 py-1 text-xs font-medium ${
+                          act.status === "FIRMADA" 
+                            ? "bg-emerald-200 text-emerald-800" 
+                            : "bg-rose-200 text-rose-800"
+                        }`}
+                      >
+                        {act.status === "FIRMADA" ? "Firmada" : "Rechazada"}
+                      </span>
+                    </div>
+                  ))}
               </div>
             )}
           </div>
@@ -191,8 +219,8 @@ export function CustodiaFirmas() {
             <div className="border-b border-border p-6">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
-                  <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-blue-100">
-                    <FileText className="h-5 w-5 text-blue-600" />
+                  <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-purple-100">
+                    <FileText className="h-5 w-5 text-purple-600" />
                   </div>
                   <div>
                     <h3 className="font-semibold text-card-foreground">Acta de Responsabilidad</h3>
@@ -237,6 +265,12 @@ export function CustodiaFirmas() {
                         <span className="text-muted-foreground">Codigo:</span>
                         <span className="font-medium">{selectedAct.assetCode}</span>
                       </div>
+                      {selectedAsset && (
+                        <div className="col-span-2 flex items-center gap-2">
+                          <span className="text-muted-foreground">Valor:</span>
+                          <span className="font-medium">${selectedAsset.value.toLocaleString("es-CL")}</span>
+                        </div>
+                      )}
                     </div>
                   </div>
 
@@ -267,7 +301,7 @@ export function CustodiaFirmas() {
                   ) : (
                     <XCircle className="h-5 w-5" />
                   )}
-                  Rechazar Firma por Discrepancia
+                  Rechazar por Discrepancia
                 </button>
                 <button
                   onClick={() => handleSignAct(selectedAct.id)}
