@@ -26,6 +26,7 @@ import {
 } from "lucide-react"
 import { useState } from "react"
 import { Loader2 } from "lucide-react"
+import { useRouter } from "next/navigation"
 
 const screens = [
   { id: 0, name: "Adquisicion", shortName: "P1", icon: ShoppingCart, color: "emerald" },
@@ -70,14 +71,15 @@ const colorClasses: Record<string, { active: string; inactive: string; icon: str
 }
 
 export default function Home() {
-  const { currentUser, currentScreen, setCurrentScreen, logout, resetStore } = useAppStore()
+  const store = useAppStore()
+  const { currentUser, currentScreen, setCurrentScreen, logout, resetStore } = store
   const [sidebarOpen, setSidebarOpen] = useState(false)
-  const [, forceUpdate] = useState(0)
   const hydrated = useHydration()
+  const router = useRouter()
 
-  // Forzar re-render después del login
-  const handleLoginComplete = () => {
-    forceUpdate((n) => n + 1)
+  const handleLogout = () => {
+    logout()
+    router.refresh()
   }
 
   // Mostrar loading mientras se hidrata el store
@@ -97,7 +99,7 @@ export default function Home() {
     return (
       <>
         <Toaster position="top-right" richColors />
-        <LoginScreen onLogin={handleLoginComplete} />
+        <LoginScreen />
       </>
     )
   }
@@ -265,7 +267,7 @@ export default function Home() {
               Reiniciar Datos
             </button>
             <button
-              onClick={logout}
+              onClick={handleLogout}
               className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium text-rose-600 transition-colors hover:bg-rose-50"
             >
               <LogOut className="h-4 w-4" />

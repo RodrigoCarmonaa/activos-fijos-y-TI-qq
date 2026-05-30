@@ -5,18 +5,14 @@ import { useAppStore } from "@/lib/store"
 import { ROLE_NAMES, type UserRole } from "@/lib/types"
 import { User, LogIn, Building2, Shield } from "lucide-react"
 
-interface LoginScreenProps {
-  onLogin?: () => void
-}
-
-export function LoginScreen({ onLogin }: LoginScreenProps) {
-  const { users, login } = useAppStore()
+export function LoginScreen() {
+  const users = useAppStore((state) => state.users)
+  const login = useAppStore((state) => state.login)
   const [selectedUserId, setSelectedUserId] = useState<string | null>(null)
 
   const handleLogin = () => {
     if (selectedUserId) {
       login(selectedUserId)
-      onLogin?.()
     }
   }
 

@@ -418,7 +418,17 @@ export function useHydration() {
   const [hydrated, setHydrated] = useState(false)
 
   useEffect(() => {
-    setHydrated(true)
+    // Esperar a que Zustand hidrate desde localStorage
+    const unsub = useAppStore.persist.onFinishHydration(() => {
+      setHydrated(true)
+    })
+    
+    // Si ya esta hidratado
+    if (useAppStore.persist.hasHydrated()) {
+      setHydrated(true)
+    }
+
+    return unsub
   }, [])
 
   return hydrated
