@@ -49,9 +49,6 @@ export function Adquisicion() {
   const validate = (): boolean => {
     const newErrors: FormErrors = {}
 
-    if (!formData.name.trim() || formData.name.trim().length < 3) {
-      newErrors.name = "El nombre debe tener al menos 3 caracteres"
-    }
     if (!formData.brand.trim()) {
       newErrors.brand = "La marca es obligatoria"
     }

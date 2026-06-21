@@ -70,7 +70,7 @@ function generateAssetCode(existingAssets: Asset[]): string {
 
 // ─── Pantallas por rol ───────────────────────────────────────────────
 export const screensByRole: Record<UserRole, number[]> = {
-  ADMIN: [0, 1, 1.5, 2, 3, 5, 6],
+  ADMIN: [0, 1, 1.5, 2, 3, 5, 6, 7],
   TECNICO_TI: [0, 2, 5],
   CUSTODIO: [0, 3],
 }

@@ -9,6 +9,7 @@ import { ConfiguracionTI } from "@/components/screens/configuracion-ti"
 import { CustodiaFirmas } from "@/components/screens/custodia-firmas"
 import { SoporteTecnico } from "@/components/screens/soporte-tecnico"
 import { Bajas } from "@/components/screens/bajas"
+import { HistorialAdmin } from "@/components/screens/historial-admin"
 import { NotificationToast } from "@/components/notification-toast"
 import {
   LayoutDashboard,
@@ -18,6 +19,7 @@ import {
   FileSignature,
   Wrench,
   Trash2,
+  ClipboardList,
   LogOut,
   Shield,
   User,
@@ -32,6 +34,7 @@ const allScreens = [
   { id: 3, name: "Custodia", icon: FileSignature, color: "blue" },
   { id: 5, name: "Soporte", icon: Wrench, color: "rose" },
   { id: 6, name: "Bajas", icon: Trash2, color: "red" },
+  { id: 7, name: "Reportes", icon: ClipboardList, color: "purple" },
 ]
 
 const colorMap: Record<string, { active: string; inactive: string; glow: string }> = {
@@ -41,6 +44,7 @@ const colorMap: Record<string, { active: string; inactive: string; glow: string 
   blue: { active: "bg-blue-500 text-white shadow-lg shadow-blue-500/30", inactive: "text-slate-400 hover:text-blue-400 hover:bg-blue-500/10", glow: "blue" },
   rose: { active: "bg-rose-500 text-white shadow-lg shadow-rose-500/30", inactive: "text-slate-400 hover:text-rose-400 hover:bg-rose-500/10", glow: "rose" },
   red: { active: "bg-red-500 text-white shadow-lg shadow-red-500/30", inactive: "text-slate-400 hover:text-red-400 hover:bg-red-500/10", glow: "red" },
+  purple: { active: "bg-purple-500 text-white shadow-lg shadow-purple-500/30", inactive: "text-slate-400 hover:text-purple-400 hover:bg-purple-500/10", glow: "purple" },
 }
 
 const roleLabels: Record<UserRole, { label: string; color: string }> = {
@@ -76,6 +80,7 @@ export default function Home() {
       case 3: return <CustodiaFirmas />
       case 5: return <SoporteTecnico />
       case 6: return <Bajas />
+      case 7: return <HistorialAdmin />
       default: return <Dashboard />
     }
   }
