@@ -13,3 +13,10 @@ __v0_jsx-dev-runtime.ts
 node_modules
 .next/
 .DS_Store
+/lib/generated/prisma
+.env
+.env.production
+.env.development
+.env.local
+.env*.local
+

@@ -3,6 +3,7 @@
 import { useState } from "react"
 import { useAppStore } from "@/lib/store"
 import { Package, QrCode, Calculator, CheckCircle, ArrowRight, Loader2, AlertCircle, ClipboardCheck } from "lucide-react"
+import { receiveAssetAction } from "@/app/actions/assets"
 
 export function Recepcion() {
   const { assets, currentAssetId, receiveAsset, setCurrentScreen, addNotification, selectAsset } = useAppStore()
@@ -42,10 +43,20 @@ export function Recepcion() {
     }
 
     setIsProcessing(true)
-    await new Promise((r) => setTimeout(r, 1000))
-    receiveAsset(scannedAsset.id, life, residual)
-    selectAsset(scannedAsset.id)
-    addNotification(`Activo ${scannedAsset.code} ingresado a bodega y valorado contablemente.`, "success")
+    const result = await receiveAssetAction(scannedAsset.id, life, residual)
+    if (result.error) {
+      addNotification(result.error, "error")
+    } else {
+      useAppStore.setState((state) => ({
+        assets: state.assets.map((a) =>
+          a.id === scannedAsset.id
+            ? { ...a, status: "EN_BODEGA", usefulLife: life, residualValue: residual }
+            : a
+        )
+      }))
+      selectAsset(scannedAsset.id)
+      addNotification(`Activo ${scannedAsset.code} ingresado a bodega y valorado contablemente.`, "success")
+    }
     setIsProcessing(false)
   }
 

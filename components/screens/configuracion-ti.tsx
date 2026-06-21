@@ -13,6 +13,7 @@ import {
   ArrowRight,
   MessageSquare,
 } from "lucide-react"
+import { configureAssetAction } from "@/app/actions/assets"
 
 export function ConfiguracionTI() {
   const {
@@ -77,10 +78,23 @@ export function ConfiguracionTI() {
     setIsInstalling(false)
   }
 
-  const handleMarkConfigured = () => {
+  const handleMarkConfigured = async () => {
     if (!currentAsset) return
-    markAssetConfigured(currentAsset.id, techNotes || undefined)
-    addNotification(`${currentAsset.code} configurado y listo para asignación.`, "success")
+    setIsInstalling(true)
+    const result = await configureAssetAction(currentAsset.id, techNotes || "")
+    if (result.error) {
+      addNotification(result.error, "error")
+    } else {
+      useAppStore.setState((state) => ({
+        assets: state.assets.map((a) =>
+          a.id === currentAsset.id
+            ? { ...a, status: "LISTO_PARA_ASIGNACION", technicianNotes: techNotes }
+            : a
+        )
+      }))
+      addNotification(`${currentAsset.code} configurado y listo para asignación.`, "success")
+    }
+    setIsInstalling(false)
   }
 
   const handleAddSoftware = () => {

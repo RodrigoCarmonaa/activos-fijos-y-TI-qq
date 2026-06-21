@@ -1,0 +1,183 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─── ENUMS ──────────────────────────────────────────────────────────
+
+enum UserRole {
+  ADMIN
+  TECNICO_TI
+  CUSTODIO
+}
+
+enum AssetStatus {
+  PENDIENTE_ADQUISICION
+  ADQUIRIDO
+  RECHAZADO
+  EN_BODEGA
+  EN_CONFIGURACION
+  LISTO_PARA_ASIGNACION
+  ASIGNADO
+  EN_MANTENCION
+  DADO_DE_BAJA
+}
+
+enum TicketPriority {
+  ALTA
+  MEDIA
+  BAJA
+}
+
+enum TicketCategory {
+  HARDWARE
+  SOFTWARE
+  RED
+  OTRO
+}
+
+enum TicketStatus {
+  ABIERTO
+  EN_PROCESO
+  CERRADO
+}
+
+enum ActStatus {
+  PENDIENTE
+  FIRMADA
+  RECHAZADA
+}
+
+// ─── MODELOS ────────────────────────────────────────────────────────
+
+model User {
+  id           String   @id @default(uuid())
+  name         String
+  email        String   @unique
+  passwordHash String
+  role         UserRole @default(CUSTODIO)
+  department   String
+  avatar       String?
+
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  // Relaciones
+  assetsAsCustodian Asset[]         @relation("AssetCustodian")
+  custodyActs       CustodyAct[]
+  auditLogs         AuditLogEntry[]
+}
+
+model Asset {
+  id                     String      @id @default(uuid())
+  code                   String      @unique
+  name                   String
+  description            String
+  value                  Int
+  provider               String
+  status                 AssetStatus @default(PENDIENTE_ADQUISICION)
+  purchaseDate           DateTime
+
+  // Datos extendidos
+  yearsInUse             Int         @default(0)
+  usefulLife             Int?
+  residualValue          Int?
+  serialNumber           String?
+  category               String?
+  location               String?
+  brand                  String?
+  model                  String?
+  
+  // Notas de flujo
+  rejectionReason        String?
+  retirementReason       String?
+  repairCost             Int?
+  technicianNotes        String?
+  physicalCheckCompleted Boolean     @default(false)
+
+  // Relaciones
+  custodianId            String?
+  custodian              User?       @relation("AssetCustodian", fields: [custodianId], references: [id])
+  
+  software               AssetSoftware[]
+  tickets                SupportTicket[]
+  custodyActs            CustodyAct[]
+  auditLogs              AuditLogEntry[]
+
+  createdAt              DateTime    @default(now())
+  updatedAt              DateTime    @updatedAt
+}
+
+model SoftwareItem {
+  id          String   @id @default(uuid())
+  name        String
+  description String
+  isCustom    Boolean  @default(false)
+  
+  // Relaciones
+  assets      AssetSoftware[]
+
+  createdAt   DateTime @default(now())
+}
+
+model AssetSoftware {
+  id             String       @id @default(uuid())
+  assetId        String
+  softwareItemId String
+  installed      Boolean      @default(false)
+  
+  asset          Asset        @relation(fields: [assetId], references: [id], onDelete: Cascade)
+  softwareItem   SoftwareItem @relation(fields: [softwareItemId], references: [id], onDelete: Cascade)
+  
+  createdAt      DateTime     @default(now())
+  installedAt    DateTime?
+
+  @@unique([assetId, softwareItemId])
+}
+
+model SupportTicket {
+  id          String         @id @default(uuid())
+  assetId     String
+  description String
+  yearsInUse  Int
+  status      TicketStatus   @default(ABIERTO)
+  priority    TicketPriority @default(MEDIA)
+  category    TicketCategory @default(OTRO)
+  resolution  String?
+  
+  asset       Asset          @relation(fields: [assetId], references: [id], onDelete: Cascade)
+
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+}
+
+model CustodyAct {
+  id              String    @id @default(uuid())
+  assetId         String
+  custodianId     String
+  status          ActStatus @default(PENDIENTE)
+  signedBy        String?
+  rejectionReason String?
+  
+  asset           Asset     @relation(fields: [assetId], references: [id], onDelete: Cascade)
+  custodianUser   User      @relation(fields: [custodianId], references: [id], onDelete: Restrict)
+
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+}
+
+model AuditLogEntry {
+  id        String   @id @default(uuid())
+  timestamp DateTime @default(now())
+  userId    String
+  action    String
+  details   String
+  
+  assetId   String?
+  asset     Asset?   @relation(fields: [assetId], references: [id], onDelete: SetNull)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}

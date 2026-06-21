@@ -68,17 +68,30 @@ function generateAssetCode(existingAssets: Asset[]): string {
   return `QR-${String(maxNum + 1).padStart(3, "0")}`
 }
 
+export const allScreens = [
+  { id: 0, title: "Dashboard", icon: "Monitor" },
+  { id: 1, title: "Adquisición", icon: "DollarSign" },
+  { id: 2, title: "Recepción", icon: "QrCode" },
+  { id: 3, title: "Configuración TI", icon: "Monitor" },
+  { id: 4, title: "Custodia", icon: "User" },
+  { id: 5, title: "Soporte", icon: "Wrench" },
+  { id: 6, title: "Bajas", icon: "Trash2" },
+  { id: 7, title: "Inventario", icon: "Building2" },
+  { id: 8, title: "Usuarios", icon: "Users" },
+]
+
 // ─── Pantallas por rol ───────────────────────────────────────────────
 export const screensByRole: Record<UserRole, number[]> = {
-  ADMIN: [0, 1, 1.5, 2, 3, 5, 6, 7],
-  TECNICO_TI: [0, 2, 5],
-  CUSTODIO: [0, 3],
+  ADMIN: [0, 1, 2, 3, 4, 5, 6, 7, 8],
+  TECNICO_TI: [0, 3, 5, 7],
+  CUSTODIO: [0, 4],
 }
 
 // ─── Estado de la app ────────────────────────────────────────────────
 interface AppState {
-  // Auth
+  // User & Auth
   currentUser: User | null
+  setSessionUser: (user: any) => void
   users: User[]
   login: (email: string, password: string) => boolean
   logout: () => void
@@ -147,6 +160,7 @@ export const useAppStore = create<AppState>()(
     (set, get) => ({
       // ─── Auth ────────────────────────────────────────────
       currentUser: null,
+      setSessionUser: (user) => set({ currentUser: user }),
       users: predefinedUsers,
 
       login: (email, password) => {

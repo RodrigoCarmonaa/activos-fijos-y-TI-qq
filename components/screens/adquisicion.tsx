@@ -2,6 +2,7 @@
 
 import { useState } from "react"
 import { useAppStore } from "@/lib/store"
+import { createAssetAction, rejectAssetAction } from "@/app/actions/assets"
 import { ShoppingCart, CheckCircle, XCircle, AlertTriangle, Loader2, Package, ArrowRight } from "lucide-react"
 
 const categories = [
@@ -73,46 +74,71 @@ export function Adquisicion() {
     return Object.keys(newErrors).length === 0
   }
 
-  const handleSubmit = async () => {
-    if (!validate()) {
-      addNotification("Corrige los errores del formulario antes de continuar.", "error")
-      return
-    }
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!validate()) return
 
     setIsProcessing(true)
-    await new Promise((r) => setTimeout(r, 800))
+    
+    const data = new FormData()
+    data.append("name", `${formData.brand} ${formData.model}`)
+    data.append("brand", formData.brand)
+    data.append("model", formData.model)
+    data.append("value", formData.value.replace(/\D/g, ""))
+    data.append("provider", formData.provider)
+    data.append("custodian", formData.custodian)
+    data.append("category", formData.category)
+    data.append("description", formData.description || "")
+    data.append("serialNumber", formData.serialNumber || "")
 
-    const numValue = parseInt(formData.value.replace(/\D/g, ""))
-    const asset = createAsset({
-      name: `${formData.brand} ${formData.model}`,
-      brand: formData.brand,
-      model: formData.model,
-      description: formData.description || `${formData.category} - ${formData.brand} ${formData.model}`,
-      value: numValue,
-      provider: formData.provider,
-      custodian: formData.custodian,
-      category: formData.category,
-      serialNumber: formData.serialNumber,
-      purchaseDate: new Date().toISOString().split("T")[0],
-    })
-
-    addNotification(`Activo ${asset.code} registrado exitosamente.`, "success")
+    const result = await createAssetAction(data)
+    
+    if (result.error) {
+      addNotification(result.error, "error")
+    } else {
+      addNotification("Activo registrado en inventario", "success")
+      setFormData({
+        name: "",
+        brand: "",
+        model: "",
+        value: "",
+        provider: "",
+        custodian: "",
+        category: "",
+        description: "",
+        serialNumber: "",
+      })
+      if (result.asset) {
+        useAppStore.setState((state) => ({
+          assets: [...state.assets, {
+            ...result.asset,
+            purchaseDate: result.asset.purchaseDate.toISOString ? result.asset.purchaseDate.toISOString().split('T')[0] : result.asset.purchaseDate
+          } as any]
+        }))
+        selectAsset(result.asset.id)
+      }
+    }
+    
     setIsProcessing(false)
   }
 
   const handleReject = async () => {
-    if (!rejectionReason.trim()) {
+    if (!currentAssetId || !rejectionReason.trim()) {
       addNotification("Debe indicar el motivo del rechazo.", "error")
       return
     }
     if (!currentAsset) return
 
     setIsProcessing(true)
-    await new Promise((r) => setTimeout(r, 800))
-    rejectAsset(currentAsset.id, rejectionReason)
-    addNotification("Adquisición rechazada. Motivo registrado.", "error")
+    const result = await rejectAssetAction(currentAsset.id, rejectionReason)
+    if (result.error) {
+      addNotification(result.error, "error")
+    } else {
+      addNotification("Adquisición rechazada. Motivo registrado.", "error")
+      setShowRejectForm(false)
+      setRejectionReason("")
+    }
     setIsProcessing(false)
-    setShowRejectForm(false)
   }
 
   const handleNewAcquisition = () => {
