@@ -1,15 +1,25 @@
 import type { Metadata } from 'next'
-import { Geist, Geist_Mono } from 'next/font/google'
+import { Inter, Geist_Mono } from 'next/font/google'
 import { Analytics } from '@vercel/analytics/next'
 import './globals.css'
 
-const _geist = Geist({ subsets: ["latin"] });
-const _geistMono = Geist_Mono({ subsets: ["latin"] });
+const inter = Inter({
+  subsets: ["latin"],
+  variable: "--font-sans",
+  display: "swap",
+});
+
+const geistMono = Geist_Mono({
+  subsets: ["latin"],
+  variable: "--font-mono",
+  display: "swap",
+});
 
 export const metadata: Metadata = {
-  title: 'ASCONT - Gestion de Activos',
-  description: 'Sistema de Gestion Integral de Activos Fijos y TI - Oficina de Contadores ASCONT',
-  generator: 'v0.app',
+  title: 'ASCONT — Sistema de Gestión de Activos Fijos',
+  description: 'Sistema de Gestión Integral de Activos Fijos y TI para ASCONT — Oficina de Contadores. Control del ciclo de vida completo: adquisición, configuración, custodia, soporte y bajas.',
+  keywords: ['activos fijos', 'gestión TI', 'contabilidad', 'ASCONT', 'custodia', 'inventario'],
+  authors: [{ name: 'ASCONT' }],
   icons: {
     icon: [
       {
@@ -35,8 +45,8 @@ export default function RootLayout({
   children: React.ReactNode
 }>) {
   return (
-    <html lang="es" className="bg-background">
-      <body className="font-sans antialiased">
+    <html lang="es" className="dark bg-[#0F1117]">
+      <body className={`${inter.variable} ${geistMono.variable} font-sans antialiased bg-[#0F1117] text-white`}>
         {children}
         {process.env.NODE_ENV === 'production' && <Analytics />}
       </body>

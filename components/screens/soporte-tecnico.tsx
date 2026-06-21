@@ -2,252 +2,396 @@
 
 import { useState } from "react"
 import { useAppStore } from "@/lib/store"
-import { AssetCard } from "@/components/asset-card"
-import { 
-  Wrench, 
-  Plus, 
-  AlertCircle, 
-  Clock, 
+import type { TicketPriority, TicketCategory } from "@/lib/types"
+import {
+  Wrench,
+  Plus,
+  AlertCircle,
+  Clock,
   FileText,
   Loader2,
   CheckCircle,
-  QrCode
+  Package,
+  MessageSquare,
+  X,
 } from "lucide-react"
 
+const priorityConfig: Record<TicketPriority, { label: string; color: string; bg: string }> = {
+  ALTA: { label: "Alta", color: "text-red-400", bg: "bg-red-500/10" },
+  MEDIA: { label: "Media", color: "text-amber-400", bg: "bg-amber-500/10" },
+  BAJA: { label: "Baja", color: "text-blue-400", bg: "bg-blue-500/10" },
+}
+
+const categoryConfig: Record<TicketCategory, { label: string }> = {
+  HARDWARE: { label: "Hardware" },
+  SOFTWARE: { label: "Software" },
+  RED: { label: "Red" },
+  OTRO: { label: "Otro" },
+}
+
 export function SoporteTecnico() {
-  const { asset, supportTickets, createTicket, addNotification } = useAppStore()
+  const {
+    assets,
+    currentAssetId,
+    supportTickets,
+    createTicket,
+    resolveTicket,
+    addNotification,
+    selectAsset,
+  } = useAppStore()
+
+  const currentAsset = assets.find((a) => a.id === currentAssetId) || null
+  const eligibleAssets = assets.filter(
+    (a) => a.status === "ASIGNADO" || a.status === "EN_MANTENCION"
+  )
+
   const [showForm, setShowForm] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [formData, setFormData] = useState({
-    assetId: asset.code,
     yearsInUse: 2,
     description: "",
+    priority: "MEDIA" as TicketPriority,
+    category: "HARDWARE" as TicketCategory,
   })
+
+  // Resolve ticket
+  const [resolvingId, setResolvingId] = useState<string | null>(null)
+  const [resolution, setResolution] = useState("")
 
   const handleSubmitTicket = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!formData.description.trim()) {
-      addNotification("Por favor, describe el problema reportado.", "warning")
+      addNotification("Describa el problema reportado.", "warning")
+      return
+    }
+    if (!currentAsset) {
+      addNotification("Seleccione un activo.", "warning")
       return
     }
 
     setIsSubmitting(true)
-    await new Promise((resolve) => setTimeout(resolve, 1500))
-    
-    createTicket(formData.description, formData.yearsInUse)
-    addNotification(
-      `Ticket creado. Activo ${asset.code} ingresado a mantencion.`,
-      "success"
-    )
-    
+    await new Promise((resolve) => setTimeout(resolve, 1200))
+    createTicket(currentAsset.id, formData.description, formData.yearsInUse, formData.priority, formData.category)
+    addNotification(`Ticket creado. ${currentAsset.code} ingresado a mantención.`, "success")
     setIsSubmitting(false)
     setShowForm(false)
     setFormData({ ...formData, description: "" })
   }
 
+  const handleResolveTicket = async (ticketId: string) => {
+    if (!resolution.trim()) {
+      addNotification("Describa la resolución del ticket.", "warning")
+      return
+    }
+    setIsSubmitting(true)
+    await new Promise((r) => setTimeout(r, 800))
+    resolveTicket(ticketId, resolution)
+    addNotification("Ticket resuelto exitosamente.", "success")
+    setIsSubmitting(false)
+    setResolvingId(null)
+    setResolution("")
+  }
+
+  const assetTickets = currentAsset
+    ? supportTickets.filter((t) => t.assetId === currentAsset.id)
+    : supportTickets
+
   return (
-    <div className="min-h-screen bg-background">
+    <div className="space-y-6 p-6">
       {/* Header */}
-      <header className="border-b border-border bg-card">
-        <div className="mx-auto max-w-5xl px-4 py-6">
-          <div className="flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-rose-100">
-              <Wrench className="h-5 w-5 text-rose-700" />
-            </div>
-            <div>
-              <h1 className="text-xl font-semibold text-card-foreground">Soporte Tecnico y Mantencion</h1>
-              <p className="text-sm text-muted-foreground">Interfaz de Soporte</p>
-            </div>
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-rose-500/10">
+            <Wrench className="h-5 w-5 text-rose-400" />
+          </div>
+          <div>
+            <h1 className="text-xl font-bold text-white">Soporte Técnico y Mantención</h1>
+            <p className="text-sm text-slate-400">Reporte de fallas y gestión de tickets</p>
           </div>
         </div>
-      </header>
+        {currentAsset && currentAsset.status === "ASIGNADO" && (
+          <button
+            onClick={() => setShowForm(true)}
+            className="flex items-center gap-2 rounded-lg bg-rose-500/20 px-4 py-2 text-sm font-medium text-rose-400 transition-all hover:bg-rose-500/30"
+          >
+            <Plus className="h-4 w-4" />
+            Nuevo Ticket
+          </button>
+        )}
+      </div>
 
-      {/* Main Content */}
-      <main className="mx-auto max-w-5xl px-4 py-8">
-        <div className="grid gap-6 lg:grid-cols-2">
-          {/* Estado del Activo */}
-          <div>
-            <h2 className="mb-4 text-lg font-semibold text-foreground">Estado del Activo</h2>
-            <AssetCard asset={asset} />
-          </div>
+      <div className="grid gap-6 lg:grid-cols-2">
+        {/* Left: Asset selector */}
+        <div className="space-y-4">
+          <h2 className="text-sm font-semibold uppercase tracking-wider text-slate-500">Seleccionar Equipo</h2>
 
-          {/* Sistema de Tickets */}
-          <div>
-            <div className="mb-4 flex items-center justify-between">
-              <h2 className="text-lg font-semibold text-foreground">Reporte de Fallas</h2>
-              <button
-                onClick={() => setShowForm(true)}
-                className="flex items-center gap-2 rounded-lg bg-rose-500 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-rose-600"
-              >
-                <Plus className="h-4 w-4" />
-                Nuevo Ticket
-              </button>
+          {eligibleAssets.length === 0 ? (
+            <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-slate-700 bg-[#1A1D27]/50 p-8 text-center">
+              <Wrench className="mb-3 h-10 w-10 text-slate-700" />
+              <p className="text-sm text-slate-500">No hay equipos asignados para reportar fallas</p>
             </div>
-
-            {/* Lista de Tickets */}
-            {supportTickets.length === 0 && !showForm ? (
-              <div className="rounded-xl border border-border bg-card p-8 text-center">
-                <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-slate-100">
-                  <FileText className="h-6 w-6 text-slate-500" />
-                </div>
-                <p className="font-medium text-card-foreground">No hay tickets registrados</p>
-                <p className="mt-1 text-sm text-muted-foreground">
-                  Crea un nuevo ticket para reportar una falla
-                </p>
-              </div>
-            ) : (
-              <div className="space-y-3">
-                {supportTickets.map((ticket) => (
-                  <div
-                    key={ticket.id}
-                    className="rounded-xl border border-rose-200 bg-rose-50 p-4"
-                  >
-                    <div className="flex items-start justify-between">
-                      <div className="flex items-center gap-3">
-                        <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-rose-100">
-                          <AlertCircle className="h-5 w-5 text-rose-600" />
-                        </div>
-                        <div>
-                          <p className="font-medium text-rose-900">
-                            Ticket #{ticket.id.split("-")[1]}
-                          </p>
-                          <p className="text-sm text-rose-700">
-                            Activo: {ticket.assetCode}
-                          </p>
-                        </div>
-                      </div>
-                      <span className="rounded-full bg-rose-200 px-2.5 py-1 text-xs font-medium text-rose-800">
-                        {ticket.status}
-                      </span>
+          ) : (
+            <div className="space-y-2">
+              {eligibleAssets.map((asset) => (
+                <button
+                  key={asset.id}
+                  onClick={() => selectAsset(asset.id)}
+                  className={`flex w-full items-center justify-between rounded-xl border p-4 text-left transition-all ${
+                    currentAssetId === asset.id
+                      ? "border-rose-500/50 bg-rose-500/5"
+                      : "border-slate-800 bg-[#1A1D27] hover:border-slate-700"
+                  }`}
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-slate-800">
+                      <Package className="h-5 w-5 text-slate-400" />
                     </div>
-
-                    <div className="mt-3 rounded-lg bg-white/50 p-3">
-                      <p className="text-sm text-rose-800">{ticket.description}</p>
-                    </div>
-
-                    <div className="mt-3 flex items-center gap-4 text-xs text-rose-700">
-                      <div className="flex items-center gap-1">
-                        <Clock className="h-3.5 w-3.5" />
-                        {ticket.yearsInUse} anios de uso
-                      </div>
-                      <div className="flex items-center gap-1">
-                        <FileText className="h-3.5 w-3.5" />
-                        {new Date(ticket.createdAt).toLocaleString("es-CL")}
-                      </div>
+                    <div>
+                      <p className="text-sm font-medium text-white">{asset.name}</p>
+                      <p className="text-xs text-slate-500">{asset.code} · {asset.custodian}</p>
                     </div>
                   </div>
-                ))}
-              </div>
-            )}
+                  <span className={`rounded-full px-2.5 py-1 text-xs font-medium ${
+                    asset.status === "EN_MANTENCION"
+                      ? "bg-orange-500/10 text-orange-400"
+                      : "bg-emerald-500/10 text-emerald-400"
+                  }`}>
+                    {asset.status === "EN_MANTENCION" ? "En Mantención" : "Asignado"}
+                  </span>
+                </button>
+              ))}
+            </div>
+          )}
 
-            {/* Formulario de Ticket */}
-            {showForm && (
-              <div className="mt-4 rounded-xl border border-border bg-card shadow-sm">
-                <div className="border-b border-border p-4">
-                  <h3 className="font-semibold text-card-foreground">Ingresar Nuevo Ticket</h3>
-                  <p className="text-sm text-muted-foreground">
-                    Complete los datos para reportar la falla
-                  </p>
+          {/* Ticket form */}
+          {showForm && currentAsset && (
+            <div className="rounded-xl border border-rose-500/30 bg-[#1A1D27] p-5">
+              <div className="mb-4 flex items-center justify-between">
+                <h3 className="font-semibold text-white">Nuevo Ticket de Soporte</h3>
+                <button onClick={() => setShowForm(false)} className="text-slate-500 hover:text-white">
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+              <form onSubmit={handleSubmitTicket} className="space-y-4">
+                {/* Asset info */}
+                <div className="rounded-lg bg-[#0F1117] p-3 text-sm">
+                  <span className="font-mono text-rose-400">{currentAsset.code}</span>
+                  <span className="ml-2 text-white">{currentAsset.name}</span>
                 </div>
 
-                <form onSubmit={handleSubmitTicket} className="p-4">
-                  <div className="space-y-4">
-                    {/* ID del Activo */}
-                    <div>
-                      <label className="mb-1.5 block text-sm font-medium text-foreground">
-                        ID del Activo
-                      </label>
-                      <div className="flex items-center gap-2 rounded-lg border border-border bg-muted/50 px-3 py-2.5">
-                        <QrCode className="h-4 w-4 text-muted-foreground" />
-                        <span className="font-medium text-foreground">{formData.assetId}</span>
-                        <span className="rounded bg-primary/10 px-2 py-0.5 text-xs text-primary">
-                          Autocompletado
+                {/* Priority + Category */}
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label htmlFor="ticket-priority" className="mb-1.5 block text-sm font-medium text-slate-300">Prioridad</label>
+                    <select
+                      id="ticket-priority"
+                      value={formData.priority}
+                      onChange={(e) => setFormData({ ...formData, priority: e.target.value as TicketPriority })}
+                      className="w-full rounded-lg border border-slate-700 bg-[#0F1117] px-3 py-2.5 text-sm text-white outline-none focus:border-rose-500"
+                    >
+                      <option value="ALTA">Alta</option>
+                      <option value="MEDIA">Media</option>
+                      <option value="BAJA">Baja</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label htmlFor="ticket-category" className="mb-1.5 block text-sm font-medium text-slate-300">Categoría</label>
+                    <select
+                      id="ticket-category"
+                      value={formData.category}
+                      onChange={(e) => setFormData({ ...formData, category: e.target.value as TicketCategory })}
+                      className="w-full rounded-lg border border-slate-700 bg-[#0F1117] px-3 py-2.5 text-sm text-white outline-none focus:border-rose-500"
+                    >
+                      <option value="HARDWARE">Hardware</option>
+                      <option value="SOFTWARE">Software</option>
+                      <option value="RED">Red</option>
+                      <option value="OTRO">Otro</option>
+                    </select>
+                  </div>
+                </div>
+
+                {/* Years in use */}
+                <div>
+                  <label htmlFor="ticket-years" className="mb-1.5 block text-sm font-medium text-slate-300">
+                    Tiempo de Uso (años)
+                  </label>
+                  <input
+                    id="ticket-years"
+                    type="number"
+                    min="0"
+                    max="20"
+                    value={formData.yearsInUse}
+                    onChange={(e) => setFormData({ ...formData, yearsInUse: parseInt(e.target.value) || 0 })}
+                    className="w-full rounded-lg border border-slate-700 bg-[#0F1117] px-3 py-2.5 text-sm text-white outline-none focus:border-rose-500"
+                  />
+                </div>
+
+                {/* Description */}
+                <div>
+                  <label htmlFor="ticket-desc" className="mb-1.5 block text-sm font-medium text-slate-300">
+                    Descripción del Problema <span className="text-red-400">*</span>
+                  </label>
+                  <textarea
+                    id="ticket-desc"
+                    rows={4}
+                    value={formData.description}
+                    onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                    placeholder="Describa el problema en detalle..."
+                    className="w-full resize-none rounded-lg border border-slate-700 bg-[#0F1117] px-3 py-2.5 text-sm text-white placeholder:text-slate-600 outline-none focus:border-rose-500 focus:ring-2 focus:ring-rose-500/20"
+                  />
+                </div>
+
+                {/* Buttons */}
+                <div className="flex gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setShowForm(false)}
+                    className="flex-1 rounded-lg border border-slate-700 py-2.5 text-sm text-slate-400 hover:bg-slate-800"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={isSubmitting}
+                    className="flex flex-1 items-center justify-center gap-2 rounded-lg bg-gradient-to-r from-rose-500 to-rose-600 py-2.5 text-sm font-semibold text-white shadow-lg shadow-rose-500/20 transition-all hover:from-rose-600 hover:to-rose-700 disabled:opacity-50"
+                  >
+                    {isSubmitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Wrench className="h-4 w-4" />}
+                    Crear Ticket
+                  </button>
+                </div>
+              </form>
+            </div>
+          )}
+        </div>
+
+        {/* Right: Tickets list */}
+        <div className="space-y-4">
+          <h2 className="text-sm font-semibold uppercase tracking-wider text-slate-500">
+            Tickets {currentAsset ? `— ${currentAsset.code}` : "— Todos"}
+          </h2>
+
+          {assetTickets.length === 0 ? (
+            <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-slate-700 bg-[#1A1D27]/50 p-8 text-center">
+              <FileText className="mb-3 h-10 w-10 text-slate-700" />
+              <p className="text-sm text-slate-500">No hay tickets registrados</p>
+              {currentAsset?.status === "ASIGNADO" && (
+                <button
+                  onClick={() => setShowForm(true)}
+                  className="mt-3 text-sm font-medium text-rose-400 hover:text-rose-300"
+                >
+                  Crear primer ticket →
+                </button>
+              )}
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {assetTickets.map((ticket) => {
+                const priConf = priorityConfig[ticket.priority || "MEDIA"]
+                const catConf = categoryConfig[ticket.category || "OTRO"]
+                const isResolving = resolvingId === ticket.id
+
+                return (
+                  <div key={ticket.id} className="rounded-xl border border-slate-800 bg-[#1A1D27] p-4">
+                    <div className="flex items-start justify-between">
+                      <div className="flex items-center gap-3">
+                        <div className={`flex h-10 w-10 items-center justify-center rounded-lg ${
+                          ticket.status === "CERRADO" ? "bg-emerald-500/10" : "bg-rose-500/10"
+                        }`}>
+                          {ticket.status === "CERRADO" ? (
+                            <CheckCircle className="h-5 w-5 text-emerald-400" />
+                          ) : (
+                            <AlertCircle className="h-5 w-5 text-rose-400" />
+                          )}
+                        </div>
+                        <div>
+                          <p className="font-medium text-white">Ticket #{ticket.id.split("-")[1]?.slice(0, 6)}</p>
+                          <p className="text-xs text-slate-500">Activo: {ticket.assetCode}</p>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${priConf.bg} ${priConf.color}`}>
+                          {priConf.label}
+                        </span>
+                        <span className={`rounded-full px-2.5 py-1 text-xs font-medium ${
+                          ticket.status === "CERRADO"
+                            ? "bg-emerald-500/10 text-emerald-400"
+                            : "bg-rose-500/10 text-rose-400"
+                        }`}>
+                          {ticket.status}
                         </span>
                       </div>
                     </div>
 
-                    {/* Tiempo de Uso */}
-                    <div>
-                      <label className="mb-1.5 block text-sm font-medium text-foreground">
-                        Tiempo de Uso (anios)
-                      </label>
-                      <input
-                        type="number"
-                        min="0"
-                        max="20"
-                        value={formData.yearsInUse}
-                        onChange={(e) =>
-                          setFormData({ ...formData, yearsInUse: parseInt(e.target.value) || 0 })
-                        }
-                        className="w-full rounded-lg border border-border bg-background px-3 py-2.5 text-foreground outline-none transition-colors focus:border-primary focus:ring-2 focus:ring-primary/20"
-                      />
+                    <div className="mt-3 rounded-lg bg-[#0F1117] p-3">
+                      <p className="text-sm text-slate-300">{ticket.description}</p>
                     </div>
 
-                    {/* Descripcion del Problema */}
-                    <div>
-                      <label className="mb-1.5 block text-sm font-medium text-foreground">
-                        Descripcion del Problema
-                      </label>
-                      <textarea
-                        rows={4}
-                        value={formData.description}
-                        onChange={(e) =>
-                          setFormData({ ...formData, description: e.target.value })
-                        }
-                        placeholder="Ej: El equipo no enciende despues de 2 anios de uso..."
-                        className="w-full resize-none rounded-lg border border-border bg-background px-3 py-2.5 text-foreground outline-none transition-colors focus:border-primary focus:ring-2 focus:ring-primary/20"
-                      />
+                    <div className="mt-3 flex items-center gap-4 text-xs text-slate-500">
+                      <span className="flex items-center gap-1">
+                        <Clock className="h-3.5 w-3.5" />
+                        {ticket.yearsInUse} años de uso
+                      </span>
+                      <span>{catConf.label}</span>
+                      <span>{new Date(ticket.createdAt).toLocaleString("es-CL", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" })}</span>
                     </div>
 
-                    {/* Botones */}
-                    <div className="flex gap-3 pt-2">
-                      <button
-                        type="button"
-                        onClick={() => setShowForm(false)}
-                        className="flex-1 rounded-lg border border-border px-4 py-2.5 font-medium text-foreground transition-colors hover:bg-muted"
-                      >
-                        Cancelar
-                      </button>
-                      <button
-                        type="submit"
-                        disabled={isSubmitting}
-                        className="flex flex-1 items-center justify-center gap-2 rounded-lg bg-rose-500 px-4 py-2.5 font-medium text-white transition-colors hover:bg-rose-600 disabled:cursor-not-allowed disabled:opacity-50"
-                      >
-                        {isSubmitting ? (
-                          <>
-                            <Loader2 className="h-4 w-4 animate-spin" />
-                            Procesando...
-                          </>
+                    {/* Resolution */}
+                    {ticket.status === "CERRADO" && ticket.resolution && (
+                      <div className="mt-3 rounded-lg border border-emerald-500/20 bg-emerald-500/5 p-3">
+                        <div className="mb-1 flex items-center gap-1.5 text-xs font-medium text-emerald-400">
+                          <MessageSquare className="h-3.5 w-3.5" />
+                          Resolución
+                        </div>
+                        <p className="text-sm text-slate-300">{ticket.resolution}</p>
+                      </div>
+                    )}
+
+                    {/* Resolve button */}
+                    {ticket.status !== "CERRADO" && (
+                      <div className="mt-3">
+                        {isResolving ? (
+                          <div className="space-y-3">
+                            <textarea
+                              rows={2}
+                              value={resolution}
+                              onChange={(e) => setResolution(e.target.value)}
+                              placeholder="Describa cómo se resolvió el problema..."
+                              className="w-full resize-none rounded-lg border border-slate-700 bg-[#0F1117] px-3 py-2 text-sm text-white placeholder:text-slate-600 outline-none focus:border-emerald-500"
+                            />
+                            <div className="flex gap-2">
+                              <button
+                                onClick={() => { setResolvingId(null); setResolution("") }}
+                                className="flex-1 rounded-lg border border-slate-700 py-2 text-xs text-slate-400 hover:bg-slate-800"
+                              >
+                                Cancelar
+                              </button>
+                              <button
+                                onClick={() => handleResolveTicket(ticket.id)}
+                                disabled={isSubmitting}
+                                className="flex flex-1 items-center justify-center gap-1.5 rounded-lg bg-emerald-500/20 py-2 text-xs font-medium text-emerald-400 hover:bg-emerald-500/30 disabled:opacity-50"
+                              >
+                                {isSubmitting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CheckCircle className="h-3.5 w-3.5" />}
+                                Resolver
+                              </button>
+                            </div>
+                          </div>
                         ) : (
-                          <>
-                            <Wrench className="h-4 w-4" />
-                            Ingresar a Soporte Tecnico
-                          </>
+                          <button
+                            onClick={() => setResolvingId(ticket.id)}
+                            className="w-full rounded-lg border border-emerald-500/30 bg-emerald-500/5 py-2 text-sm font-medium text-emerald-400 transition-all hover:bg-emerald-500/10"
+                          >
+                            Resolver Ticket
+                          </button>
                         )}
-                      </button>
-                    </div>
+                      </div>
+                    )}
                   </div>
-                </form>
-              </div>
-            )}
-
-            {/* Estado Actual */}
-            {supportTickets.length > 0 && (
-              <div className="mt-4 rounded-lg border border-emerald-200 bg-emerald-50 p-4">
-                <div className="flex items-center gap-3">
-                  <CheckCircle className="h-5 w-5 text-emerald-600" />
-                  <div>
-                    <p className="font-medium text-emerald-800">Activo en Mantencion</p>
-                    <p className="text-sm text-emerald-700">
-                      El equipo {asset.code} ha sido ingresado al sistema de soporte
-                    </p>
-                  </div>
-                </div>
-              </div>
-            )}
-          </div>
+                )
+              })}
+            </div>
+          )}
         </div>
-      </main>
+      </div>
     </div>
   )
 }

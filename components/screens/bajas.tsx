@@ -2,149 +2,302 @@
 
 import { useState } from "react"
 import { useAppStore } from "@/lib/store"
-import { Trash2, AlertOctagon, TrendingDown, DollarSign, Activity, FileWarning, RotateCcw, Loader2 } from "lucide-react"
+import {
+  Trash2,
+  AlertOctagon,
+  TrendingDown,
+  DollarSign,
+  Activity,
+  FileWarning,
+  RotateCcw,
+  Loader2,
+  Package,
+  Wrench,
+  CheckCircle,
+} from "lucide-react"
 
 export function Bajas() {
-  const { asset, retireAsset, addNotification, resetAsset } = useAppStore()
+  const {
+    assets,
+    currentAssetId,
+    retireAsset,
+    repairAsset,
+    addNotification,
+    selectAsset,
+    setCurrentScreen,
+  } = useAppStore()
+
+  const currentAsset = assets.find((a) => a.id === currentAssetId) || null
+  const eligibleAssets = assets.filter(
+    (a) => a.status === "EN_MANTENCION" || a.status === "DADO_DE_BAJA"
+  )
+
   const [isProcessing, setIsProcessing] = useState(false)
+  const [repairCost, setRepairCost] = useState("")
+  const [retirementReason, setRetirementReason] = useState("")
+  const [techDiagnosis, setTechDiagnosis] = useState("")
+
+  const repairCostNum = parseInt(repairCost.replace(/\D/g, "")) || 0
+  const assetValue = currentAsset?.value || 0
+  const threshold50 = assetValue * 0.5
+  const exceedsThreshold = repairCostNum > threshold50 && repairCostNum > 0
+
+  const handleRepairCostChange = (raw: string) => {
+    const digits = raw.replace(/\D/g, "")
+    setRepairCost(digits ? parseInt(digits).toLocaleString("es-CL") : "")
+  }
 
   const handleRetire = async () => {
+    if (!currentAsset) return
+    if (!retirementReason.trim()) {
+      addNotification("Debe indicar el motivo de la baja.", "warning")
+      return
+    }
+    if (repairCostNum <= 0) {
+      addNotification("Ingrese el costo estimado de reparación.", "warning")
+      return
+    }
+
     setIsProcessing(true)
-    await new Promise((r) => setTimeout(r, 1500))
-    retireAsset()
-    addNotification("Baja autorizada. Se ha gatillado automaticamente una nueva solicitud de reposicion para el trabajador.", "warning")
+    await new Promise((r) => setTimeout(r, 1200))
+
+    // Update repair cost on asset
+    useAppStore.getState().updateAsset(currentAsset.id, { repairCost: repairCostNum })
+    retireAsset(currentAsset.id, retirementReason)
+    addNotification("Baja autorizada. Se ha generado una solicitud de reposición.", "warning")
     setIsProcessing(false)
   }
 
-  const repairCost = 450000
-  const originalValue = 845900
-  const threshold50 = originalValue * 0.5
-  const isIrreparable = repairCost > threshold50
-
-  if (asset.status !== "EN_MANTENCION" && asset.status !== "DADO_DE_BAJA") {
-    return (
-      <div className="flex min-h-[60vh] items-center justify-center p-4">
-        <div className="max-w-md text-center">
-          <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-slate-100">
-            <Trash2 className="h-8 w-8 text-slate-400" />
-          </div>
-          <h2 className="text-xl font-bold text-foreground">Modulo de Bajas Inactivo</h2>
-          <p className="mt-2 text-sm text-muted-foreground">
-            Este modulo solo evalua equipos en estado EN MANTENCION tecnica que puedan calificar para baja. Estado actual: {asset.status.replace(/_/g, " ")}
-          </p>
-        </div>
-      </div>
-    )
+  const handleRepair = async () => {
+    if (!currentAsset) return
+    setIsProcessing(true)
+    await new Promise((r) => setTimeout(r, 1000))
+    repairAsset(currentAsset.id)
+    addNotification(`${currentAsset.code} reparado exitosamente. Retorna a estado ASIGNADO.`, "success")
+    setIsProcessing(false)
   }
 
   return (
-    <div className="min-h-screen bg-background">
-      <header className="border-b border-border bg-card">
-        <div className="mx-auto max-w-5xl px-4 py-6">
-          <div className="flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-red-100">
-              <FileWarning className="h-5 w-5 text-red-700" />
-            </div>
-            <div>
-              <h1 className="text-xl font-semibold text-card-foreground">Gestion de Bajas y Reposicion</h1>
-              <p className="text-sm text-muted-foreground">Interfaz del Coordinador de Logistica</p>
-            </div>
-          </div>
+    <div className="space-y-6 p-6">
+      {/* Header */}
+      <div className="flex items-center gap-3">
+        <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-red-500/10">
+          <FileWarning className="h-5 w-5 text-red-400" />
         </div>
-      </header>
+        <div>
+          <h1 className="text-xl font-bold text-white">Gestión de Bajas y Reposición</h1>
+          <p className="text-sm text-slate-400">Evaluación de reparabilidad y baja de activos</p>
+        </div>
+      </div>
 
-      <main className="mx-auto max-w-5xl px-4 py-8">
+      {eligibleAssets.length === 0 ? (
+        <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-slate-700 bg-[#1A1D27]/50 p-12 text-center">
+          <Trash2 className="mb-3 h-12 w-12 text-slate-700" />
+          <h2 className="text-lg font-semibold text-slate-400">Módulo de Bajas Inactivo</h2>
+          <p className="mt-1 text-sm text-slate-500">
+            Solo evalúa equipos en estado EN MANTENCIÓN que puedan calificar para baja.
+          </p>
+          <button
+            onClick={() => setCurrentScreen(5)}
+            className="mt-4 text-sm font-medium text-red-400 hover:text-red-300"
+          >
+            Ir a Soporte Técnico →
+          </button>
+        </div>
+      ) : (
         <div className="grid gap-6 lg:grid-cols-2">
-          <div>
-            <h2 className="mb-4 text-lg font-semibold text-foreground">Evaluacion de Soporte Tecnico</h2>
-            <div className="rounded-xl border border-border bg-card p-6 shadow-sm">
-              <div className="mb-6 flex items-start gap-4 rounded-lg bg-orange-50 p-4">
-                <AlertOctagon className="mt-0.5 h-5 w-5 text-orange-600" />
-                <div>
-                  <p className="font-medium text-orange-900">Dictamen Tecnico: Placa Madre Quemada</p>
-                  <p className="mt-1 text-sm text-orange-800">
-                    El equipo presenta falla catastrofica en componentes principales tras {asset.yearsInUse} anos de uso intensivo.
-                  </p>
-                </div>
-              </div>
+          {/* Left: Asset selector + evaluation */}
+          <div className="space-y-4">
+            <h2 className="text-sm font-semibold uppercase tracking-wider text-slate-500">Equipos en Evaluación</h2>
 
-              <h3 className="mb-3 font-medium text-foreground">Analisis Financiero (Regla del 50%)</h3>
-              <div className="space-y-4">
-                <div className="flex items-center justify-between rounded-lg border border-border px-4 py-3">
+            {/* Asset selector */}
+            <div className="space-y-2">
+              {eligibleAssets.map((asset) => (
+                <button
+                  key={asset.id}
+                  onClick={() => selectAsset(asset.id)}
+                  className={`flex w-full items-center justify-between rounded-xl border p-4 text-left transition-all ${
+                    currentAssetId === asset.id
+                      ? "border-red-500/50 bg-red-500/5"
+                      : "border-slate-800 bg-[#1A1D27] hover:border-slate-700"
+                  }`}
+                >
                   <div className="flex items-center gap-3">
-                    <DollarSign className="h-5 w-5 text-muted-foreground" />
-                    <span className="text-sm font-medium">Valor Original de Adquisicion</span>
+                    <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-slate-800">
+                      <Package className="h-5 w-5 text-slate-400" />
+                    </div>
+                    <div>
+                      <p className="text-sm font-medium text-white">{asset.name}</p>
+                      <p className="text-xs text-slate-500">{asset.code} · {asset.yearsInUse} años de uso</p>
+                    </div>
                   </div>
-                  <span className="font-mono font-medium">$845.900</span>
-                </div>
-                <div className="flex items-center justify-between rounded-lg border border-border px-4 py-3">
-                  <div className="flex items-center gap-3">
-                    <TrendingDown className="h-5 w-5 text-muted-foreground" />
-                    <span className="text-sm font-medium">Umbral 50% de Reparacion</span>
-                  </div>
-                  <span className="font-mono font-medium">$422.950</span>
-                </div>
-                <div className="flex items-center justify-between rounded-lg border border-red-200 bg-red-50 px-4 py-3">
-                  <div className="flex items-center gap-3">
-                    <Activity className="h-5 w-5 text-red-600" />
-                    <span className="text-sm font-medium text-red-900">Costo Estimado Reparacion</span>
-                  </div>
-                  <span className="font-mono font-bold text-red-700">$450.000</span>
-                </div>
-              </div>
-              {isIrreparable && (
-                <div className="mt-4 text-center text-sm font-medium text-red-600">
-                  * El costo de reparacion supera el 50% del valor original. Califica para baja tecnica.
-                </div>
-              )}
+                  <span className={`rounded-full px-2.5 py-1 text-xs font-medium ${
+                    asset.status === "DADO_DE_BAJA"
+                      ? "bg-red-500/10 text-red-400"
+                      : "bg-orange-500/10 text-orange-400"
+                  }`}>
+                    {asset.status === "DADO_DE_BAJA" ? "Dado de Baja" : "En Mantención"}
+                  </span>
+                </button>
+              ))}
             </div>
+
+            {/* Technical diagnosis */}
+            {currentAsset && currentAsset.status === "EN_MANTENCION" && (
+              <div className="rounded-xl border border-slate-800 bg-[#1A1D27] p-5">
+                <div className="mb-3 flex items-center gap-2">
+                  <AlertOctagon className="h-4 w-4 text-orange-400" />
+                  <h3 className="text-sm font-medium text-white">Dictamen Técnico</h3>
+                </div>
+                <textarea
+                  rows={3}
+                  value={techDiagnosis}
+                  onChange={(e) => setTechDiagnosis(e.target.value)}
+                  placeholder="Describa el diagnóstico técnico del equipo..."
+                  className="w-full resize-none rounded-lg border border-slate-700 bg-[#0F1117] px-4 py-2.5 text-sm text-white placeholder:text-slate-600 outline-none transition-all focus:border-red-500 focus:ring-2 focus:ring-red-500/20"
+                />
+              </div>
+            )}
           </div>
 
-          <div>
-            <h2 className="mb-4 text-lg font-semibold text-foreground">Resolucion y Cierre</h2>
-            <div className="rounded-xl border border-border bg-card p-6 shadow-sm">
-              {asset.status === "DADO_DE_BAJA" ? (
-                <div className="text-center">
-                  <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-slate-100">
-                    <Trash2 className="h-8 w-8 text-slate-600" />
+          {/* Right: Financial analysis + resolution */}
+          <div className="space-y-4">
+            {currentAsset ? (
+              currentAsset.status === "DADO_DE_BAJA" ? (
+                // Asset already retired
+                <div className="rounded-xl border border-slate-800 bg-[#1A1D27] p-6 text-center">
+                  <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-slate-800">
+                    <Trash2 className="h-8 w-8 text-slate-500" />
                   </div>
-                  <h3 className="text-lg font-bold text-foreground">Activo Desincorporado</h3>
-                  <p className="mt-2 text-sm text-muted-foreground">
-                    El equipo {asset.code} ha sido dado de baja legal y contablemente.
+                  <h3 className="text-lg font-bold text-white">Activo Desincorporado</h3>
+                  <p className="mt-2 text-sm text-slate-400">
+                    {currentAsset.code} ha sido dado de baja legal y contablemente.
                   </p>
-                  <div className="mt-6 rounded-lg bg-amber-50 p-4 border border-amber-200">
-                    <p className="text-sm font-medium text-amber-800">Circularidad de Flujo Activada</p>
-                    <p className="mt-1 text-xs text-amber-700">
-                      Se ha generado una solicitud de reposicion de equipo para el colaborador: <strong>{asset.custodian}</strong>
+                  {currentAsset.retirementReason && (
+                    <div className="mt-4 rounded-lg bg-[#0F1117] p-3 text-left">
+                      <p className="text-xs text-slate-500 mb-1">Motivo de baja:</p>
+                      <p className="text-sm text-slate-300">{currentAsset.retirementReason}</p>
+                    </div>
+                  )}
+                  <div className="mt-4 rounded-lg border border-amber-500/20 bg-amber-500/5 p-4">
+                    <p className="text-sm font-medium text-amber-400">Circularidad de Flujo Activada</p>
+                    <p className="mt-1 text-xs text-amber-400/70">
+                      Se ha generado una solicitud de reposición de equipo para: <strong>{currentAsset.custodian}</strong>
                     </p>
                   </div>
                   <button
-                    onClick={() => resetAsset()}
-                    className="mt-6 flex w-full items-center justify-center gap-2 rounded-lg border border-border bg-white px-4 py-2.5 text-sm font-medium transition-colors hover:bg-slate-50"
+                    onClick={() => setCurrentScreen(1)}
+                    className="mt-4 flex w-full items-center justify-center gap-2 rounded-lg border border-slate-700 px-4 py-2.5 text-sm text-slate-400 transition-all hover:bg-slate-800 hover:text-white"
                   >
                     <RotateCcw className="h-4 w-4" />
-                    Reiniciar Simulador (Volver a Pantalla 1)
+                    Ir a Nueva Adquisición
                   </button>
                 </div>
               ) : (
+                // Financial analysis
                 <>
-                  <p className="mb-6 text-sm text-muted-foreground">
-                    Al autorizar la baja, el activo sera retirado de los libros contables y se iniciara automaticamente el flujo de reposicion para que el trabajador no pierda continuidad operativa.
-                  </p>
-                  <button
-                    onClick={handleRetire}
-                    disabled={isProcessing}
-                    className="flex w-full items-center justify-center gap-2 rounded-lg bg-red-600 px-4 py-3 text-sm font-medium text-white transition-colors hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-50"
-                  >
-                    {isProcessing ? <Loader2 className="h-5 w-5 animate-spin" /> : <FileWarning className="h-5 w-5" />}
-                    Autorizar Baja Legal del Activo
-                  </button>
+                  <h2 className="text-sm font-semibold uppercase tracking-wider text-slate-500">
+                    Análisis Financiero — Regla del 50%
+                  </h2>
+                  <div className="rounded-xl border border-slate-800 bg-[#1A1D27] p-5 space-y-4">
+                    {/* Original value */}
+                    <div className="flex items-center justify-between rounded-lg border border-slate-700 bg-[#0F1117] px-4 py-3">
+                      <div className="flex items-center gap-3">
+                        <DollarSign className="h-5 w-5 text-slate-500" />
+                        <span className="text-sm text-slate-300">Valor Original</span>
+                      </div>
+                      <span className="font-mono font-medium text-white">${assetValue.toLocaleString("es-CL")}</span>
+                    </div>
+
+                    {/* 50% threshold */}
+                    <div className="flex items-center justify-between rounded-lg border border-slate-700 bg-[#0F1117] px-4 py-3">
+                      <div className="flex items-center gap-3">
+                        <TrendingDown className="h-5 w-5 text-slate-500" />
+                        <span className="text-sm text-slate-300">Umbral 50%</span>
+                      </div>
+                      <span className="font-mono font-medium text-amber-400">${threshold50.toLocaleString("es-CL")}</span>
+                    </div>
+
+                    {/* Repair cost input */}
+                    <div>
+                      <label htmlFor="baja-repair-cost" className="mb-1.5 block text-sm font-medium text-slate-300">
+                        Costo Estimado de Reparación <span className="text-red-400">*</span>
+                      </label>
+                      <div className="relative">
+                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-slate-500">$</span>
+                        <input
+                          id="baja-repair-cost"
+                          type="text"
+                          value={repairCost}
+                          onChange={(e) => handleRepairCostChange(e.target.value)}
+                          placeholder="Ingrese costo estimado"
+                          className={`w-full rounded-lg border py-2.5 pl-7 pr-4 text-sm font-mono outline-none transition-all ${
+                            exceedsThreshold
+                              ? "border-red-500/50 bg-red-500/5 text-red-400 focus:ring-red-500/20"
+                              : "border-slate-700 bg-[#0F1117] text-white focus:ring-emerald-500/20"
+                          } focus:ring-2`}
+                        />
+                      </div>
+                      {exceedsThreshold && (
+                        <div className="mt-2 flex items-center gap-2 text-xs text-red-400">
+                          <Activity className="h-3.5 w-3.5" />
+                          El costo supera el 50% del valor original. Califica para baja técnica.
+                        </div>
+                      )}
+                      {repairCostNum > 0 && !exceedsThreshold && (
+                        <div className="mt-2 flex items-center gap-2 text-xs text-emerald-400">
+                          <CheckCircle className="h-3.5 w-3.5" />
+                          El costo no supera el umbral. Se recomienda reparar.
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Retirement reason */}
+                    <div>
+                      <label htmlFor="baja-reason" className="mb-1.5 block text-sm font-medium text-slate-300">
+                        Motivo de la Baja <span className="text-red-400">*</span>
+                      </label>
+                      <textarea
+                        id="baja-reason"
+                        rows={2}
+                        value={retirementReason}
+                        onChange={(e) => setRetirementReason(e.target.value)}
+                        placeholder="Describa el motivo de la baja del activo..."
+                        className="w-full resize-none rounded-lg border border-slate-700 bg-[#0F1117] px-4 py-2.5 text-sm text-white placeholder:text-slate-600 outline-none focus:border-red-500 focus:ring-2 focus:ring-red-500/20"
+                      />
+                    </div>
+
+                    {/* Actions */}
+                    <div className="flex gap-3 pt-2">
+                      <button
+                        onClick={handleRepair}
+                        disabled={isProcessing}
+                        className="flex flex-1 items-center justify-center gap-2 rounded-lg border border-emerald-500/30 bg-emerald-500/5 px-4 py-3 text-sm font-medium text-emerald-400 transition-all hover:bg-emerald-500/10 disabled:opacity-50"
+                      >
+                        {isProcessing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Wrench className="h-4 w-4" />}
+                        Reparar Equipo
+                      </button>
+                      <button
+                        onClick={handleRetire}
+                        disabled={isProcessing}
+                        className="flex flex-1 items-center justify-center gap-2 rounded-lg bg-gradient-to-r from-red-500 to-red-600 px-4 py-3 text-sm font-semibold text-white shadow-lg shadow-red-500/20 transition-all hover:from-red-600 hover:to-red-700 disabled:opacity-50"
+                      >
+                        {isProcessing ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileWarning className="h-4 w-4" />}
+                        Autorizar Baja
+                      </button>
+                    </div>
+                  </div>
                 </>
-              )}
-            </div>
+              )
+            ) : (
+              <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-slate-700 bg-[#1A1D27]/50 p-8 text-center">
+                <Activity className="mb-3 h-10 w-10 text-slate-700" />
+                <p className="text-sm text-slate-500">Seleccione un equipo para evaluar</p>
+              </div>
+            )}
           </div>
         </div>
-      </main>
+      )}
     </div>
   )
 }

@@ -1,116 +1,624 @@
 "use client"
 
 import { create } from "zustand"
-import type { Asset, AssetStatus, SoftwareItem, SupportTicket, CustodyAct } from "./types"
+import { persist } from "zustand/middleware"
+import type {
+  Asset,
+  AssetStatus,
+  SoftwareItem,
+  SupportTicket,
+  CustodyAct,
+  User,
+  UserRole,
+  AuditLogEntry,
+  Custodian,
+  TicketPriority,
+  TicketCategory,
+} from "./types"
 
-const emptyAsset: Asset = {
-  id: "",
-  code: "",
-  name: "",
-  description: "",
-  value: 0,
-  provider: "",
-  custodian: "",
-  status: "PENDIENTE_ADQUISICION",
-  purchaseDate: "",
-  yearsInUse: 0,
-}
+// ─── Usuarios predefinidos ───────────────────────────────────────────
+const predefinedUsers: User[] = [
+  {
+    id: "user-001",
+    name: "Diego Leiva",
+    email: "diego.leiva@ascont.cl",
+    role: "ADMIN",
+    department: "Administración",
+  },
+  {
+    id: "user-002",
+    name: "Rodrigo Carmona",
+    email: "rodrigo.carmona@ascont.cl",
+    role: "TECNICO_TI",
+    department: "Tecnología",
+  },
+  {
+    id: "user-003",
+    name: "María González",
+    email: "maria.gonzalez@ascont.cl",
+    role: "CUSTODIO",
+    department: "Contabilidad",
+  },
+]
 
-const testAsset: Asset = {
-  id: "asset-001",
-  code: "QR-012",
-  name: "Notebook HP ProBook 450 G10",
-  description: "Notebook corporativo de alta gama para trabajo contable",
-  value: 845900,
-  provider: "SOLUCIONES TCP",
-  custodian: "Diego Leiva",
-  status: "ADQUIRIDO",
-  purchaseDate: new Date().toISOString().split("T")[0],
-  yearsInUse: 0,
-}
+// ─── Custodios disponibles ───────────────────────────────────────────
+const defaultCustodians: Custodian[] = [
+  { id: "cust-001", name: "Rodrigo Carmona", department: "Tecnología", email: "rodrigo.carmona@ascont.cl" },
+  { id: "cust-002", name: "María González", department: "Contabilidad", email: "maria.gonzalez@ascont.cl" },
+  { id: "cust-003", name: "Diego Leiva", department: "Administración", email: "diego.leiva@ascont.cl" },
+  { id: "cust-004", name: "Ana Martínez", department: "Recursos Humanos", email: "ana.martinez@ascont.cl" },
+  { id: "cust-005", name: "Carlos Pérez", department: "Finanzas", email: "carlos.perez@ascont.cl" },
+]
 
-const corporateSoftware: SoftwareItem[] = [
-  { id: "sw-001", name: "Sistema Contable ASCONT", description: "Software de gestion contable y tributaria", installed: false },
-  { id: "sw-002", name: "VPN Corporativa", description: "Conexion segura a la red interna de ASCONT", installed: false },
+// ─── Software corporativo por defecto ───────────────────────────────
+const defaultSoftware: SoftwareItem[] = [
+  { id: "sw-001", name: "Sistema Contable ASCONT", description: "Software de gestión contable y tributaria", installed: false },
+  { id: "sw-002", name: "VPN Corporativa", description: "Conexión segura a la red interna de ASCONT", installed: false },
   { id: "sw-003", name: "Microsoft Office 365", description: "Suite de productividad y herramientas de oficina", installed: false },
-  { id: "sw-004", name: "Antivirus Corporativo", description: "Proteccion contra malware y amenazas", installed: false },
-  { id: "sw-005", name: "Cliente de Correo Outlook", description: "Gestion de correo electronico corporativo", installed: false },
+  { id: "sw-004", name: "Antivirus Corporativo", description: "Protección contra malware y amenazas", installed: false },
+  { id: "sw-005", name: "Cliente de Correo Outlook", description: "Gestión de correo electrónico corporativo", installed: false },
 ]
 
-const initialCustodyActs: CustodyAct[] = [
-  { id: "act-001", assetId: "asset-001", assetCode: "QR-012", assetName: "Notebook HP ProBook 450 G10", custodian: "Rodrigo Carmona", createdAt: new Date().toISOString(), status: "PENDIENTE" },
-]
+// ─── Generador de código QR ──────────────────────────────────────────
+function generateAssetCode(existingAssets: Asset[]): string {
+  const maxNum = existingAssets.reduce((max, a) => {
+    const match = a.code.match(/^QR-(\d+)$/)
+    return match ? Math.max(max, parseInt(match[1])) : max
+  }, 0)
+  return `QR-${String(maxNum + 1).padStart(3, "0")}`
+}
 
+// ─── Pantallas por rol ───────────────────────────────────────────────
+export const screensByRole: Record<UserRole, number[]> = {
+  ADMIN: [0, 1, 1.5, 2, 3, 5, 6],
+  TECNICO_TI: [0, 2, 5],
+  CUSTODIO: [0, 3],
+}
+
+// ─── Estado de la app ────────────────────────────────────────────────
 interface AppState {
-  asset: Asset
-  setAssetStatus: (status: AssetStatus) => void
-  resetAsset: () => void
-  acquireAsset: (success: boolean) => void
-  receiveAsset: (usefulLife: number, residualValue: number) => void
-  retireAsset: () => void
-  software: SoftwareItem[]
-  installSoftware: (id: string) => void
-  installAllSoftware: () => void
-  resetSoftware: () => void
+  // Auth
+  currentUser: User | null
+  users: User[]
+  login: (email: string, password: string) => boolean
+  logout: () => void
+
+  // Assets (múltiples)
+  assets: Asset[]
+  currentAssetId: string | null
+  getCurrentAsset: () => Asset | null
+  createAsset: (data: Omit<Asset, "id" | "code" | "status" | "yearsInUse" | "createdAt">) => Asset
+  updateAsset: (id: string, data: Partial<Asset>) => void
+  setAssetStatus: (id: string, status: AssetStatus) => void
+  rejectAsset: (id: string, reason: string) => void
+  selectAsset: (id: string) => void
+
+  // Recepción
+  receiveAsset: (id: string, usefulLife: number, residualValue: number) => void
+  retireAsset: (id: string, reason: string) => void
+  repairAsset: (id: string) => void
+
+  // Software
+  software: Record<string, SoftwareItem[]>
+  getSoftwareForAsset: (assetId: string) => SoftwareItem[]
+  initSoftwareForAsset: (assetId: string) => void
+  installSoftware: (assetId: string, swId: string) => void
+  installAllSoftware: (assetId: string) => void
+  addCustomSoftware: (assetId: string, name: string, description: string) => void
+  removeSoftware: (assetId: string, swId: string) => void
+  markAssetConfigured: (assetId: string, notes?: string) => void
+
+  // Custodia
+  custodians: Custodian[]
   custodyActs: CustodyAct[]
-  signAct: (id: string) => void
-  rejectAct: (id: string) => void
+  createCustodyAct: (assetId: string, custodianName: string) => void
+  signAct: (actId: string, signedBy: string) => void
+  rejectAct: (actId: string, reason: string) => void
+
+  // Soporte
   supportTickets: SupportTicket[]
-  createTicket: (description: string, yearsInUse: number) => void
+  createTicket: (
+    assetId: string,
+    description: string,
+    yearsInUse: number,
+    priority: TicketPriority,
+    category: TicketCategory
+  ) => void
+  resolveTicket: (ticketId: string, resolution: string) => void
+
+  // Notifications
   notifications: { id: string; message: string; type: "success" | "error" | "warning" }[]
   addNotification: (message: string, type: "success" | "error" | "warning") => void
   removeNotification: (id: string) => void
+
+  // Navigation
   currentScreen: number
   setCurrentScreen: (screen: number) => void
+
+  // Audit log
+  auditLog: AuditLogEntry[]
+
+  // Reset
+  resetAll: () => void
 }
 
-export const useAppStore = create<AppState>((set) => ({
-  asset: emptyAsset,
-  setAssetStatus: (status) => set((state) => ({ asset: { ...state.asset, status } })),
-  resetAsset: () => set({ asset: emptyAsset, supportTickets: [], currentScreen: 1 }),
+export const useAppStore = create<AppState>()(
+  persist(
+    (set, get) => ({
+      // ─── Auth ────────────────────────────────────────────
+      currentUser: null,
+      users: predefinedUsers,
 
-  acquireAsset: (success) => set((state) => {
-    if (success) return { asset: { ...testAsset } }
-    return { asset: { ...state.asset, name: "Notebook HP ProBook 450 G10", value: 845900, provider: "SOLUCIONES TCP", custodian: "Diego Leiva", status: "RECHAZADO" as AssetStatus } }
-  }),
+      login: (email, password) => {
+        // Password simple: "ascont123" para todos
+        const user = predefinedUsers.find((u) => u.email === email)
+        if (user && password === "ascont123") {
+          set({ currentUser: user, currentScreen: 0 })
+          const log: AuditLogEntry = {
+            id: `log-${Date.now()}`,
+            timestamp: new Date().toISOString(),
+            userId: user.id,
+            userName: user.name,
+            action: "LOGIN",
+            details: `${user.name} inició sesión como ${user.role}`,
+          }
+          set((state) => ({ auditLog: [log, ...state.auditLog] }))
+          return true
+        }
+        return false
+      },
 
-  receiveAsset: (usefulLife, residualValue) => set((state) => ({
-    asset: { ...state.asset, status: "EN_BODEGA" as AssetStatus, usefulLife, residualValue },
-  })),
+      logout: () => {
+        const user = get().currentUser
+        if (user) {
+          const log: AuditLogEntry = {
+            id: `log-${Date.now()}`,
+            timestamp: new Date().toISOString(),
+            userId: user.id,
+            userName: user.name,
+            action: "LOGOUT",
+            details: `${user.name} cerró sesión`,
+          }
+          set((state) => ({
+            currentUser: null,
+            currentScreen: 0,
+            auditLog: [log, ...state.auditLog],
+          }))
+        } else {
+          set({ currentUser: null, currentScreen: 0 })
+        }
+      },
 
-  retireAsset: () => set((state) => ({
-    asset: { ...state.asset, status: "DADO_DE_BAJA" as AssetStatus },
-  })),
+      // ─── Assets ──────────────────────────────────────────
+      assets: [],
+      currentAssetId: null,
 
-  software: corporateSoftware,
-  installSoftware: (id) => set((state) => ({ software: state.software.map((sw) => sw.id === id ? { ...sw, installed: true } : sw) })),
-  installAllSoftware: () => set((state) => ({ software: state.software.map((sw) => ({ ...sw, installed: true })) })),
-  resetSoftware: () => set({ software: corporateSoftware }),
+      getCurrentAsset: () => {
+        const { assets, currentAssetId } = get()
+        return assets.find((a) => a.id === currentAssetId) || null
+      },
 
-  custodyActs: initialCustodyActs,
-  signAct: (id) => set((state) => ({
-    custodyActs: state.custodyActs.map((act) => act.id === id ? { ...act, status: "FIRMADA" as const } : act),
-    asset: { ...state.asset, status: "ASIGNADO" as AssetStatus },
-  })),
-  rejectAct: (id) => set((state) => ({
-    custodyActs: state.custodyActs.map((act) => act.id === id ? { ...act, status: "RECHAZADA" as const } : act),
-    asset: { ...state.asset, status: "EN_BODEGA" as AssetStatus },
-  })),
+      createAsset: (data) => {
+        const state = get()
+        const user = state.currentUser
+        const code = generateAssetCode(state.assets)
+        const newAsset: Asset = {
+          ...data,
+          id: `asset-${Date.now()}`,
+          code,
+          status: "ADQUIRIDO",
+          yearsInUse: 0,
+          createdAt: new Date().toISOString(),
+        }
+        const log: AuditLogEntry = {
+          id: `log-${Date.now()}`,
+          timestamp: new Date().toISOString(),
+          userId: user?.id || "system",
+          userName: user?.name || "Sistema",
+          action: "CREAR_ACTIVO",
+          details: `Activo ${code} creado: ${newAsset.name}`,
+          assetId: newAsset.id,
+          assetCode: code,
+        }
+        set((state) => ({
+          assets: [...state.assets, newAsset],
+          currentAssetId: newAsset.id,
+          auditLog: [log, ...state.auditLog],
+        }))
+        return newAsset
+      },
 
-  supportTickets: [],
-  createTicket: (description, yearsInUse) => set((state) => {
-    const newTicket: SupportTicket = { id: "ticket-" + Date.now(), assetId: state.asset.id, assetCode: state.asset.code, description, yearsInUse, createdAt: new Date().toISOString(), status: "ABIERTO" }
-    return { supportTickets: [...state.supportTickets, newTicket], asset: { ...state.asset, status: "EN_MANTENCION" as AssetStatus, yearsInUse } }
-  }),
+      updateAsset: (id, data) => {
+        set((state) => ({
+          assets: state.assets.map((a) => (a.id === id ? { ...a, ...data } : a)),
+        }))
+      },
 
-  notifications: [],
-  addNotification: (message, type) => set((state) => ({
-    notifications: [...state.notifications, { id: "notif-" + Date.now(), message, type }],
-  })),
-  removeNotification: (id) => set((state) => ({
-    notifications: state.notifications.filter((n) => n.id !== id),
-  })),
+      setAssetStatus: (id, status) => {
+        const user = get().currentUser
+        const asset = get().assets.find((a) => a.id === id)
+        const log: AuditLogEntry = {
+          id: `log-${Date.now()}`,
+          timestamp: new Date().toISOString(),
+          userId: user?.id || "system",
+          userName: user?.name || "Sistema",
+          action: "CAMBIO_ESTADO",
+          details: `Estado cambiado a ${status.replace(/_/g, " ")}`,
+          assetId: id,
+          assetCode: asset?.code || "",
+        }
+        set((state) => ({
+          assets: state.assets.map((a) => (a.id === id ? { ...a, status } : a)),
+          auditLog: [log, ...state.auditLog],
+        }))
+      },
 
-  currentScreen: 1,
-  setCurrentScreen: (screen) => set({ currentScreen: screen }),
-}))
+      rejectAsset: (id, reason) => {
+        const user = get().currentUser
+        const asset = get().assets.find((a) => a.id === id)
+        const log: AuditLogEntry = {
+          id: `log-${Date.now()}`,
+          timestamp: new Date().toISOString(),
+          userId: user?.id || "system",
+          userName: user?.name || "Sistema",
+          action: "RECHAZAR_ACTIVO",
+          details: `Activo rechazado: ${reason}`,
+          assetId: id,
+          assetCode: asset?.code || "",
+        }
+        set((state) => ({
+          assets: state.assets.map((a) =>
+            a.id === id ? { ...a, status: "RECHAZADO" as AssetStatus, rejectionReason: reason } : a
+          ),
+          auditLog: [log, ...state.auditLog],
+        }))
+      },
+
+      selectAsset: (id) => set({ currentAssetId: id }),
+
+      // ─── Recepción ───────────────────────────────────────
+      receiveAsset: (id, usefulLife, residualValue) => {
+        const user = get().currentUser
+        const asset = get().assets.find((a) => a.id === id)
+        const log: AuditLogEntry = {
+          id: `log-${Date.now()}`,
+          timestamp: new Date().toISOString(),
+          userId: user?.id || "system",
+          userName: user?.name || "Sistema",
+          action: "RECIBIR_ACTIVO",
+          details: `Activo recibido en bodega. Vida útil: ${usefulLife} años, Valor residual: $${residualValue.toLocaleString("es-CL")}`,
+          assetId: id,
+          assetCode: asset?.code || "",
+        }
+        set((state) => ({
+          assets: state.assets.map((a) =>
+            a.id === id
+              ? { ...a, status: "EN_BODEGA" as AssetStatus, usefulLife, residualValue, physicalCheckCompleted: true }
+              : a
+          ),
+          auditLog: [log, ...state.auditLog],
+        }))
+      },
+
+      retireAsset: (id, reason) => {
+        const user = get().currentUser
+        const asset = get().assets.find((a) => a.id === id)
+        const log: AuditLogEntry = {
+          id: `log-${Date.now()}`,
+          timestamp: new Date().toISOString(),
+          userId: user?.id || "system",
+          userName: user?.name || "Sistema",
+          action: "BAJA_ACTIVO",
+          details: `Activo dado de baja: ${reason}`,
+          assetId: id,
+          assetCode: asset?.code || "",
+        }
+        set((state) => ({
+          assets: state.assets.map((a) =>
+            a.id === id
+              ? { ...a, status: "DADO_DE_BAJA" as AssetStatus, retirementReason: reason }
+              : a
+          ),
+          auditLog: [log, ...state.auditLog],
+        }))
+      },
+
+      repairAsset: (id) => {
+        const user = get().currentUser
+        const asset = get().assets.find((a) => a.id === id)
+        const log: AuditLogEntry = {
+          id: `log-${Date.now()}`,
+          timestamp: new Date().toISOString(),
+          userId: user?.id || "system",
+          userName: user?.name || "Sistema",
+          action: "REPARAR_ACTIVO",
+          details: `Activo reparado, retorna a estado ASIGNADO`,
+          assetId: id,
+          assetCode: asset?.code || "",
+        }
+        set((state) => ({
+          assets: state.assets.map((a) =>
+            a.id === id ? { ...a, status: "ASIGNADO" as AssetStatus } : a
+          ),
+          auditLog: [log, ...state.auditLog],
+        }))
+      },
+
+      // ─── Software ─────────────────────────────────────────
+      software: {},
+
+      getSoftwareForAsset: (assetId) => {
+        return get().software[assetId] || []
+      },
+
+      initSoftwareForAsset: (assetId) => {
+        const existing = get().software[assetId]
+        if (!existing || existing.length === 0) {
+          set((state) => ({
+            software: {
+              ...state.software,
+              [assetId]: defaultSoftware.map((sw) => ({ ...sw, id: `${sw.id}-${assetId}` })),
+            },
+          }))
+        }
+      },
+
+      installSoftware: (assetId, swId) => {
+        set((state) => ({
+          software: {
+            ...state.software,
+            [assetId]: (state.software[assetId] || []).map((sw) =>
+              sw.id === swId ? { ...sw, installed: true } : sw
+            ),
+          },
+        }))
+      },
+
+      installAllSoftware: (assetId) => {
+        set((state) => ({
+          software: {
+            ...state.software,
+            [assetId]: (state.software[assetId] || []).map((sw) => ({ ...sw, installed: true })),
+          },
+        }))
+      },
+
+      addCustomSoftware: (assetId, name, description) => {
+        const newSw: SoftwareItem = {
+          id: `sw-custom-${Date.now()}`,
+          name,
+          description,
+          installed: false,
+          isCustom: true,
+        }
+        set((state) => ({
+          software: {
+            ...state.software,
+            [assetId]: [...(state.software[assetId] || []), newSw],
+          },
+        }))
+      },
+
+      removeSoftware: (assetId, swId) => {
+        set((state) => ({
+          software: {
+            ...state.software,
+            [assetId]: (state.software[assetId] || []).filter((sw) => sw.id !== swId),
+          },
+        }))
+      },
+
+      markAssetConfigured: (assetId, notes) => {
+        const user = get().currentUser
+        const asset = get().assets.find((a) => a.id === assetId)
+        const log: AuditLogEntry = {
+          id: `log-${Date.now()}`,
+          timestamp: new Date().toISOString(),
+          userId: user?.id || "system",
+          userName: user?.name || "Sistema",
+          action: "CONFIGURAR_ACTIVO",
+          details: `Software instalado y activo configurado${notes ? `. Notas: ${notes}` : ""}`,
+          assetId,
+          assetCode: asset?.code || "",
+        }
+        set((state) => ({
+          assets: state.assets.map((a) =>
+            a.id === assetId
+              ? { ...a, status: "LISTO_PARA_ASIGNACION" as AssetStatus, technicianNotes: notes }
+              : a
+          ),
+          auditLog: [log, ...state.auditLog],
+        }))
+      },
+
+      // ─── Custodia ─────────────────────────────────────────
+      custodians: defaultCustodians,
+      custodyActs: [],
+
+      createCustodyAct: (assetId, custodianName) => {
+        const asset = get().assets.find((a) => a.id === assetId)
+        if (!asset) return
+        const user = get().currentUser
+        const newAct: CustodyAct = {
+          id: `act-${Date.now()}`,
+          assetId,
+          assetCode: asset.code,
+          assetName: asset.name,
+          custodian: custodianName,
+          createdAt: new Date().toISOString(),
+          status: "PENDIENTE",
+        }
+        const log: AuditLogEntry = {
+          id: `log-${Date.now()}`,
+          timestamp: new Date().toISOString(),
+          userId: user?.id || "system",
+          userName: user?.name || "Sistema",
+          action: "CREAR_ACTA",
+          details: `Acta de custodia creada para ${custodianName}`,
+          assetId,
+          assetCode: asset.code,
+        }
+        set((state) => ({
+          custodyActs: [...state.custodyActs, newAct],
+          assets: state.assets.map((a) =>
+            a.id === assetId ? { ...a, custodian: custodianName } : a
+          ),
+          auditLog: [log, ...state.auditLog],
+        }))
+      },
+
+      signAct: (actId, signedBy) => {
+        const act = get().custodyActs.find((a) => a.id === actId)
+        if (!act) return
+        const user = get().currentUser
+        const log: AuditLogEntry = {
+          id: `log-${Date.now()}`,
+          timestamp: new Date().toISOString(),
+          userId: user?.id || "system",
+          userName: user?.name || "Sistema",
+          action: "FIRMAR_ACTA",
+          details: `Acta firmada por ${signedBy}. Activo asignado.`,
+          assetId: act.assetId,
+          assetCode: act.assetCode,
+        }
+        set((state) => ({
+          custodyActs: state.custodyActs.map((a) =>
+            a.id === actId ? { ...a, status: "FIRMADA" as const, signedBy } : a
+          ),
+          assets: state.assets.map((a) =>
+            a.id === act.assetId ? { ...a, status: "ASIGNADO" as AssetStatus } : a
+          ),
+          auditLog: [log, ...state.auditLog],
+        }))
+      },
+
+      rejectAct: (actId, reason) => {
+        const act = get().custodyActs.find((a) => a.id === actId)
+        if (!act) return
+        const user = get().currentUser
+        const log: AuditLogEntry = {
+          id: `log-${Date.now()}`,
+          timestamp: new Date().toISOString(),
+          userId: user?.id || "system",
+          userName: user?.name || "Sistema",
+          action: "RECHAZAR_ACTA",
+          details: `Acta rechazada: ${reason}`,
+          assetId: act.assetId,
+          assetCode: act.assetCode,
+        }
+        set((state) => ({
+          custodyActs: state.custodyActs.map((a) =>
+            a.id === actId ? { ...a, status: "RECHAZADA" as const, rejectionReason: reason } : a
+          ),
+          assets: state.assets.map((a) =>
+            a.id === act.assetId ? { ...a, status: "EN_BODEGA" as AssetStatus } : a
+          ),
+          auditLog: [log, ...state.auditLog],
+        }))
+      },
+
+      // ─── Soporte ──────────────────────────────────────────
+      supportTickets: [],
+
+      createTicket: (assetId, description, yearsInUse, priority, category) => {
+        const asset = get().assets.find((a) => a.id === assetId)
+        if (!asset) return
+        const user = get().currentUser
+        const newTicket: SupportTicket = {
+          id: `ticket-${Date.now()}`,
+          assetId,
+          assetCode: asset.code,
+          description,
+          yearsInUse,
+          createdAt: new Date().toISOString(),
+          status: "ABIERTO",
+          priority,
+          category,
+        }
+        const log: AuditLogEntry = {
+          id: `log-${Date.now()}`,
+          timestamp: new Date().toISOString(),
+          userId: user?.id || "system",
+          userName: user?.name || "Sistema",
+          action: "CREAR_TICKET",
+          details: `Ticket creado [${priority}/${category}]: ${description.substring(0, 60)}...`,
+          assetId,
+          assetCode: asset.code,
+        }
+        set((state) => ({
+          supportTickets: [...state.supportTickets, newTicket],
+          assets: state.assets.map((a) =>
+            a.id === assetId ? { ...a, status: "EN_MANTENCION" as AssetStatus, yearsInUse } : a
+          ),
+          auditLog: [log, ...state.auditLog],
+        }))
+      },
+
+      resolveTicket: (ticketId, resolution) => {
+        const ticket = get().supportTickets.find((t) => t.id === ticketId)
+        if (!ticket) return
+        const user = get().currentUser
+        const log: AuditLogEntry = {
+          id: `log-${Date.now()}`,
+          timestamp: new Date().toISOString(),
+          userId: user?.id || "system",
+          userName: user?.name || "Sistema",
+          action: "RESOLVER_TICKET",
+          details: `Ticket resuelto: ${resolution}`,
+          assetId: ticket.assetId,
+          assetCode: ticket.assetCode,
+        }
+        set((state) => ({
+          supportTickets: state.supportTickets.map((t) =>
+            t.id === ticketId ? { ...t, status: "CERRADO" as const, resolution } : t
+          ),
+          auditLog: [log, ...state.auditLog],
+        }))
+      },
+
+      // ─── Notificaciones ───────────────────────────────────
+      notifications: [],
+      addNotification: (message, type) =>
+        set((state) => ({
+          notifications: [...state.notifications, { id: `notif-${Date.now()}`, message, type }],
+        })),
+      removeNotification: (id) =>
+        set((state) => ({
+          notifications: state.notifications.filter((n) => n.id !== id),
+        })),
+
+      // ─── Navegación ───────────────────────────────────────
+      currentScreen: 0,
+      setCurrentScreen: (screen) => set({ currentScreen: screen }),
+
+      // ─── Audit Log ────────────────────────────────────────
+      auditLog: [],
+
+      // ─── Reset ────────────────────────────────────────────
+      resetAll: () =>
+        set({
+          assets: [],
+          currentAssetId: null,
+          software: {},
+          custodyActs: [],
+          supportTickets: [],
+          notifications: [],
+          currentScreen: 0,
+          auditLog: [],
+        }),
+    }),
+    {
+      name: "ascont-storage",
+      partialize: (state) => ({
+        assets: state.assets,
+        currentAssetId: state.currentAssetId,
+        software: state.software,
+        custodyActs: state.custodyActs,
+        supportTickets: state.supportTickets,
+        currentUser: state.currentUser,
+        currentScreen: state.currentScreen,
+        auditLog: state.auditLog,
+      }),
+    }
+  )
+)

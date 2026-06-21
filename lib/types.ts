@@ -1,4 +1,4 @@
-﻿// Estados posibles del activo en el flujo
+// Estados posibles del activo en el flujo
 export type AssetStatus =
   | "PENDIENTE_ADQUISICION"
   | "ADQUIRIDO"
@@ -24,6 +24,18 @@ export interface Asset {
   yearsInUse: number
   usefulLife?: number
   residualValue?: number
+  serialNumber?: string
+  category?: string
+  location?: string
+  department?: string
+  brand?: string
+  model?: string
+  rejectionReason?: string
+  retirementReason?: string
+  repairCost?: number
+  technicianNotes?: string
+  physicalCheckCompleted?: boolean
+  createdAt?: string
 }
 
 // Software corporativo
@@ -32,9 +44,13 @@ export interface SoftwareItem {
   name: string
   description: string
   installed: boolean
+  isCustom?: boolean
 }
 
 // Ticket de soporte
+export type TicketPriority = "ALTA" | "MEDIA" | "BAJA"
+export type TicketCategory = "HARDWARE" | "SOFTWARE" | "RED" | "OTRO"
+
 export interface SupportTicket {
   id: string
   assetId: string
@@ -43,6 +59,9 @@ export interface SupportTicket {
   yearsInUse: number
   createdAt: string
   status: "ABIERTO" | "EN_PROCESO" | "CERRADO"
+  priority?: TicketPriority
+  category?: TicketCategory
+  resolution?: string
 }
 
 // Acta de custodia
@@ -54,4 +73,38 @@ export interface CustodyAct {
   custodian: string
   createdAt: string
   status: "PENDIENTE" | "FIRMADA" | "RECHAZADA"
+  signedBy?: string
+  rejectionReason?: string
+}
+
+// Roles de usuario
+export type UserRole = "ADMIN" | "TECNICO_TI" | "CUSTODIO"
+
+export interface User {
+  id: string
+  name: string
+  email: string
+  role: UserRole
+  department: string
+  avatar?: string
+}
+
+// Log de auditoría
+export interface AuditLogEntry {
+  id: string
+  timestamp: string
+  userId: string
+  userName: string
+  action: string
+  details: string
+  assetId?: string
+  assetCode?: string
+}
+
+// Custodios disponibles
+export interface Custodian {
+  id: string
+  name: string
+  department: string
+  email: string
 }

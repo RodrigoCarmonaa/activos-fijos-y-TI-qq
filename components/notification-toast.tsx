@@ -27,17 +27,17 @@ export function NotificationToast() {
 
   const getIcon = (type: "success" | "error" | "warning") => {
     switch (type) {
-      case "success": return <CheckCircle className="h-5 w-5 text-emerald-500" />
-      case "error": return <XCircle className="h-5 w-5 text-rose-500" />
-      case "warning": return <AlertTriangle className="h-5 w-5 text-amber-500" />
+      case "success": return <CheckCircle className="h-5 w-5 text-emerald-400" />
+      case "error": return <XCircle className="h-5 w-5 text-red-400" />
+      case "warning": return <AlertTriangle className="h-5 w-5 text-amber-400" />
     }
   }
 
   const getStyles = (type: "success" | "error" | "warning") => {
     switch (type) {
-      case "success": return "border-emerald-200 bg-emerald-50"
-      case "error": return "border-rose-200 bg-rose-50"
-      case "warning": return "border-amber-200 bg-amber-50"
+      case "success": return "border-emerald-500/30 bg-emerald-500/10"
+      case "error": return "border-red-500/30 bg-red-500/10"
+      case "warning": return "border-amber-500/30 bg-amber-500/10"
     }
   }
 
@@ -46,15 +46,15 @@ export function NotificationToast() {
       {notifications.map((notification) => (
         <div
           key={notification.id}
-          className={"flex items-start gap-3 rounded-lg border p-4 shadow-lg animate-in slide-in-from-right-5 " + getStyles(notification.type)}
+          className={`flex items-start gap-3 rounded-xl border p-4 shadow-2xl backdrop-blur-md animate-in slide-in-from-right-5 duration-300 ${getStyles(notification.type)}`}
         >
           <div className="shrink-0 mt-0.5">{getIcon(notification.type)}</div>
-          <p className="flex-1 text-sm font-medium text-foreground">{notification.message}</p>
+          <p className="flex-1 text-sm font-medium text-white">{notification.message}</p>
           <button
             onClick={() => removeNotification(notification.id)}
-            className="shrink-0 rounded-full p-1 hover:bg-black/5"
+            className="shrink-0 rounded-full p-1 text-slate-500 hover:text-white transition-colors"
           >
-            <X className="h-4 w-4 text-muted-foreground" />
+            <X className="h-4 w-4" />
           </button>
         </div>
       ))}
